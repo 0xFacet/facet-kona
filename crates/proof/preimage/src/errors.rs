@@ -44,6 +44,9 @@ pub enum ChannelError {
     /// Unexpected EOF.
     #[error("Unexpected EOF in channel read operation.")]
     UnexpectedEOF,
+    /// Buffer length mismatch.
+    #[error("Buffer length mismatch. Expected {0}, got {1}.")]
+    BufferLengthMismatch(usize, usize),
 }
 
 /// A [Result] type for the [ChannelError] enum.

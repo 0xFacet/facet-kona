@@ -38,6 +38,10 @@ serde = { workspace = true, optional = true }
 serde_repr = { workspace = true, optional = true }
 kona-serde = { workspace = true, optional = true }
 
+# std-only dependencies
+hex = { workspace = true, optional = true }
+alloy-trie = { workspace = true, optional = true }
+
 [dev-dependencies]
 toml = { workspace = true, features = ["parse"] }
 rand = { workspace = true, features = ["thread_rng"] }
@@ -55,7 +59,9 @@ std = [
     "alloy-eips/std",
     "kona-serde?/std",
     "serde?/std",
-    "thiserror/std"
+    "thiserror/std",
+    "dep:hex",
+    "dep:alloy-trie"
 ]
 arbitrary = [
     "std",

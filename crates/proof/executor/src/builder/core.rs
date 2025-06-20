@@ -113,6 +113,24 @@ where
             .recovered_transactions_with_encoded()
             .collect::<Result<Vec<_>, SignatureError>>()
             .map_err(ExecutorError::SignatureError)?;
+        
+        // Debug: Log transaction count and details using tracing
+        debug!(
+            target: "block_builder",
+            tx_count = transactions.len(),
+            block_number = block_env.number,
+            "Executing transactions."
+        );
+
+        // Log individual transaction indices at trace level
+        for (i, _) in transactions.iter().enumerate() {
+            trace!(
+                target: "block_builder",
+                tx_index = i,
+                "Processing transaction."
+            );
+        }
+        
         let ex_result = executor.execute_block(transactions.iter())?;
 
         info!(
@@ -125,6 +143,25 @@ where
         // Step 4. Merge state transitions and seal the block.
         state.merge_transitions(BundleRetention::Reverts);
         let bundle = state.take_bundle();
+        
+        // Debug: Log bundle state changes summary
+        debug!(
+            target: "block_builder",
+            account_count = bundle.state().len(),
+            "Bundle state changes."
+        );
+
+        // Trace level logging for individual account changes (may be verbose)
+        for (addr, account) in bundle.state() {
+            trace!(
+                target: "block_builder",
+                ?addr,
+                status = ?account.status,
+                balance = ?account.info.as_ref().map(|i| &i.balance),
+                nonce = ?account.info.as_ref().map(|i| &i.nonce),
+                "Account state update."
+            );
+        }
         let header = self.seal_block(&attrs, parent_hash, &block_env, &ex_result, bundle)?;
 
         info!(

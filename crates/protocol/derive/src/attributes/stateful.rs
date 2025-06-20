@@ -5,8 +5,8 @@ use crate::{
     traits::{AttributesBuilder, ChainProvider, L2ChainProvider},
     types::PipelineResult,
 };
-use alloc::{boxed::Box, fmt::Debug, string::ToString, sync::Arc, vec, vec::Vec};
-use alloy_consensus::{Eip658Value, Receipt};
+use alloc::{boxed::Box, fmt::Debug, format, string::ToString, sync::Arc, vec, vec::Vec};
+use alloy_consensus::{Eip658Value, Receipt, Transaction};
 use alloy_eips::{BlockNumHash, eip2718::Encodable2718};
 use alloy_primitives::{Address, B256, Bytes};
 use alloy_rlp::Encodable;
@@ -15,9 +15,10 @@ use async_trait::async_trait;
 use kona_genesis::RollupConfig;
 use kona_hardforks::{Hardfork, Hardforks};
 use kona_protocol::{
-    DEPOSIT_EVENT_ABI_HASH, L1BlockInfoTx, L2BlockInfo, Predeploys, decode_deposit,
+    decode_deposit, FctMintCalculator, L1BlockInfoTx, L2BlockInfo, Predeploys, DEPOSIT_EVENT_ABI_HASH
 };
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
+use crate::derive_facet_deposits;
 
 /// A stateful implementation of the [AttributesBuilder].
 #[derive(Debug, Default)]
@@ -56,6 +57,14 @@ where
         l2_parent: L2BlockInfo,
         epoch: BlockNumHash,
     ) -> PipelineResult<OpPayloadAttributes> {
+        tracing::info!(
+            target: "attributes_builder",
+            "prepare_payload_attributes called for L2 block {} (parent: {}), L1 origin: {} -> epoch: {}",
+            l2_parent.block_info.number + 1,
+            l2_parent.block_info.number,
+            l2_parent.l1_origin.number,
+            epoch.number
+        );
         let l1_header;
         let deposit_transactions: Vec<Bytes>;
 
@@ -65,10 +74,49 @@ where
             .await
             .map_err(Into::into)?;
 
+        // Initialize FCT values - will be updated if processing facet deposits
+        let mut new_fct_mint_rate: u128;
+        let mut new_fct_mint_period_l1_data_gas: u128;
+        
+        // Read facet parameters from parent block (needed for both new and continuing epochs)
+        let (parent_fct_mint_rate, parent_fct_mint_period_l1_data_gas) = if l2_parent.block_info.number > 0 {
+            // Fetch parent block to get facet parameters
+            let parent_block = self
+                .config_fetcher
+                .block_by_number(l2_parent.block_info.number)
+                .await
+                .map_err(|e| PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit())?;
+            
+            let first_tx = parent_block.body.transactions.first()
+                .ok_or_else(|| PipelineError::AttributesBuilder(BuilderError::Custom("Parent block has no transactions".to_string())).crit())?;
+            
+            let deposit_tx = first_tx.as_deposit()
+                .ok_or_else(|| PipelineError::AttributesBuilder(BuilderError::Custom("First transaction is not a deposit".to_string())).crit())?;
+            
+            let l1_info = L1BlockInfoTx::decode_calldata(deposit_tx.input().as_ref())
+                .map_err(|e| PipelineError::AttributesBuilder(BuilderError::Custom(format!("Failed to decode L1 info: {}", e))).crit())?;
+            
+            match l1_info {
+                L1BlockInfoTx::Facet(facet_info) => {
+                    (facet_info.fct_mint_rate, facet_info.fct_mint_period_l1_data_gas)
+                }
+                _ => return Err(PipelineError::AttributesBuilder(BuilderError::Custom("Parent block is not using Facet L1 info variant".to_string())).crit()),
+            }
+        } else {
+            (FctMintCalculator::INITIAL_RATE, 0u128)
+        };
+
         // If the L1 origin changed in this block, then we are in the first block of the epoch.
         // In this case we need to fetch all transaction receipts from the L1 origin block so
         // we can scan for user deposits.
         let sequence_number = if l2_parent.l1_origin.number != epoch.number {
+            tracing::info!(
+                target: "attributes_builder",
+                "L1 origin changed from {} to {} for L2 block {}",
+                l2_parent.l1_origin.number,
+                epoch.number,
+                l2_parent.block_info.number + 1
+            );
             let header =
                 self.receipts_fetcher.header_by_hash(epoch.hash).await.map_err(Into::into)?;
             if l2_parent.l1_origin.hash != header.parent_hash {
@@ -83,10 +131,40 @@ where
             }
             let receipts =
                 self.receipts_fetcher.receipts_by_hash(epoch.hash).await.map_err(Into::into)?;
-            let deposits =
-                derive_deposits(epoch.hash, &receipts, self.rollup_cfg.deposit_contract_address)
-                    .await
-                    .map_err(|e| PipelineError::BadEncoding(e).crit())?;
+            let (_, txs) = self
+                .receipts_fetcher
+                .block_info_and_transactions_by_hash(epoch.hash)
+                .await
+                .map_err(Into::into)?;
+
+            tracing::info!(
+                target: "attributes_builder",
+                "Processing L1 block {} with {} transactions and {} receipts",
+                epoch.number,
+                txs.len(),
+                receipts.len()
+            );
+            
+            let (deposits, rate, cumulative_gas) = derive_facet_deposits(
+                &txs,
+                &receipts,
+                self.rollup_cfg.l2_chain_id,
+                l2_parent.block_info.number + 1, // Next L2 block number
+                parent_fct_mint_rate,
+                parent_fct_mint_period_l1_data_gas,
+            )
+            .map_err(|e| PipelineError::BadEncoding(e).crit())?;
+            
+            tracing::info!(
+                target: "attributes_builder",
+                "derive_facet_deposits returned {} deposits for L2 block {}",
+                deposits.len(),
+                l2_parent.block_info.number + 1
+            );
+            
+            // Update FCT values
+            new_fct_mint_rate = rate;
+            new_fct_mint_period_l1_data_gas = cumulative_gas;
             sys_config
                 .update_with_receipts(
                     &receipts,
@@ -98,6 +176,14 @@ where
             deposit_transactions = deposits;
             0
         } else {
+            tracing::debug!(
+                target: "attributes_builder",
+                "L1 origin unchanged at {} for L2 block {}, sequence number {}",
+                epoch.number,
+                l2_parent.block_info.number + 1,
+                l2_parent.seq_num + 1
+            );
+            
             #[allow(clippy::collapsible_else_if)]
             if l2_parent.l1_origin.hash != epoch.hash {
                 return Err(PipelineErrorKind::Reset(
@@ -109,6 +195,9 @@ where
                 self.receipts_fetcher.header_by_hash(epoch.hash).await.map_err(Into::into)?;
             l1_header = header;
             deposit_transactions = vec![];
+            // Preserve parent FCT values when not processing deposits
+            new_fct_mint_rate = parent_fct_mint_rate;
+            new_fct_mint_period_l1_data_gas = parent_fct_mint_period_l1_data_gas;
             l2_parent.seq_num + 1
         };
 
@@ -149,13 +238,15 @@ where
             upgrade_transactions.append(&mut Hardforks::INTEROP.txs().collect());
         }
 
-        // Build and encode the L1 info transaction for the current payload.
-        let (_, l1_info_tx_envelope) = L1BlockInfoTx::try_new_with_deposit_tx(
+        // Build and encode the L1 info transaction for the current payload with FCT values.
+        let (_, l1_info_tx_envelope) = L1BlockInfoTx::try_new_with_deposit_tx_and_fct_values(
             &self.rollup_cfg,
             &sys_config,
             sequence_number,
             &l1_header,
             next_l2_time,
+            new_fct_mint_rate,
+            new_fct_mint_period_l1_data_gas,
         )
         .map_err(|e| {
             PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit()
@@ -166,8 +257,17 @@ where
         let mut txs =
             Vec::with_capacity(1 + deposit_transactions.len() + upgrade_transactions.len());
         txs.push(encoded_l1_info_tx.into());
-        txs.extend(deposit_transactions);
+        txs.extend(deposit_transactions.clone());
         txs.extend(upgrade_transactions);
+        
+        tracing::info!(
+            target: "attributes_builder",
+            "Building payload for L2 block {} with {} total transactions (1 L1 info + {} deposits + {} upgrades)",
+            l2_parent.block_info.number + 1,
+            txs.len(),
+            deposit_transactions.len(),
+            txs.len() - 1 - deposit_transactions.len()
+        );
 
         let mut withdrawals = None;
         if self.rollup_cfg.is_canyon_active(next_l2_time) {
@@ -180,11 +280,19 @@ where
             parent_beacon_root = Some(l1_header.parent_beacon_block_root.unwrap_or_default());
         }
 
+        tracing::debug!(
+            target: "attributes_builder",
+            "Using L1 header for payload attributes: number={}, hash={:?}, mix_hash={:?}",
+            l1_header.number,
+            l1_header.hash_slow(),
+            l1_header.mix_hash
+        );
+        
         Ok(OpPayloadAttributes {
             payload_attributes: PayloadAttributes {
                 timestamp: next_l2_time,
                 prev_randao: l1_header.mix_hash,
-                suggested_fee_recipient: Predeploys::SEQUENCER_FEE_VAULT,
+                suggested_fee_recipient: Address::ZERO, // Facet uses zero address as beneficiary
                 parent_beacon_block_root: parent_beacon_root,
                 withdrawals,
             },
@@ -200,38 +308,6 @@ where
             ),
         })
     }
-}
-
-/// Derive deposits as `Vec<Bytes>` for transaction receipts.
-///
-/// Successful deposits must be emitted by the deposit contract and have the correct event
-/// signature. So the receipt address must equal the specified deposit contract and the first topic
-/// must be the [DEPOSIT_EVENT_ABI_HASH].
-async fn derive_deposits(
-    block_hash: B256,
-    receipts: &[Receipt],
-    deposit_contract: Address,
-) -> Result<Vec<Bytes>, PipelineEncodingError> {
-    let mut global_index = 0;
-    let mut res = Vec::new();
-    for r in receipts.iter() {
-        if Eip658Value::Eip658(false) == r.status {
-            continue;
-        }
-        for l in r.logs.iter() {
-            let curr_index = global_index;
-            global_index += 1;
-            if l.data.topics().first().is_none_or(|i| *i != DEPOSIT_EVENT_ABI_HASH) {
-                continue;
-            }
-            if l.address != deposit_contract {
-                continue;
-            }
-            let decoded = decode_deposit(block_hash, curr_index, l)?;
-            res.push(decoded);
-        }
-    }
-    Ok(res)
 }
 
 #[cfg(test)]
@@ -295,54 +371,6 @@ mod tests {
             logs: vec![generate_valid_log(), bad_dest_log, invalid_topic_log],
             ..Default::default()
         }
-    }
-
-    #[tokio::test]
-    async fn test_derive_deposits_empty() {
-        let receipts = vec![];
-        let deposit_contract = Address::default();
-        let result = derive_deposits(B256::default(), &receipts, deposit_contract).await;
-        assert!(result.unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_derive_deposits_non_deposit_events_filtered_out() {
-        let deposit_contract = address!("1111111111111111111111111111111111111111");
-        let mut invalid = generate_valid_receipt();
-        invalid.logs[0].data = LogData::new_unchecked(vec![], Bytes::default());
-        let receipts = vec![generate_valid_receipt(), generate_valid_receipt(), invalid];
-        let result = derive_deposits(B256::default(), &receipts, deposit_contract).await;
-        assert_eq!(result.unwrap().len(), 5);
-    }
-
-    #[tokio::test]
-    async fn test_derive_deposits_non_deposit_contract_addr() {
-        let deposit_contract = address!("1111111111111111111111111111111111111111");
-        let mut invalid = generate_valid_receipt();
-        invalid.logs[0].address = Address::default();
-        let receipts = vec![generate_valid_receipt(), generate_valid_receipt(), invalid];
-        let result = derive_deposits(B256::default(), &receipts, deposit_contract).await;
-        assert_eq!(result.unwrap().len(), 5);
-    }
-
-    #[tokio::test]
-    async fn test_derive_deposits_decoding_errors() {
-        let deposit_contract = address!("1111111111111111111111111111111111111111");
-        let mut invalid = generate_valid_receipt();
-        invalid.logs[0].data =
-            LogData::new_unchecked(vec![DEPOSIT_EVENT_ABI_HASH], Bytes::default());
-        let receipts = vec![generate_valid_receipt(), generate_valid_receipt(), invalid];
-        let result = derive_deposits(B256::default(), &receipts, deposit_contract).await;
-        let downcasted = result.unwrap_err();
-        assert_eq!(downcasted, DepositError::UnexpectedTopicsLen(1).into());
-    }
-
-    #[tokio::test]
-    async fn test_derive_deposits_succeeds() {
-        let deposit_contract = address!("1111111111111111111111111111111111111111");
-        let receipts = vec![generate_valid_receipt(), generate_valid_receipt()];
-        let result = derive_deposits(B256::default(), &receipts, deposit_contract).await;
-        assert_eq!(result.unwrap().len(), 4);
     }
 
     #[tokio::test]

@@ -29,3 +29,6 @@ pub mod types;
 
 #[cfg(feature = "test-utils")]
 pub mod test_utils;
+
+mod helpers;
+pub use helpers::facet_deposits::derive_facet_deposits;

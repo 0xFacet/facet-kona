@@ -9,7 +9,7 @@ use op_alloy_consensus::{DepositSourceDomain, L1InfoDepositSource, TxDeposit};
 
 use crate::{
     BlockInfoError, DecodeError, L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus,
-    Predeploys,
+    info::L1BlockInfoFacet, Predeploys,
 };
 
 /// The system transaction gas limit post-Regolith
@@ -33,6 +33,8 @@ pub enum L1BlockInfoTx {
     Ecotone(L1BlockInfoEcotone),
     /// An Isthmus L1 info transaction
     Isthmus(L1BlockInfoIsthmus),
+    /// A Facet L1 info transaction
+    Facet(L1BlockInfoFacet),
 }
 
 impl L1BlockInfoTx {
@@ -117,18 +119,26 @@ impl L1BlockInfoTx {
             }));
         }
 
-        Ok(Self::Ecotone(L1BlockInfoEcotone {
+        // Facet is always active for the facet chain
+        // Use default values for the facet-specific fields - these will be overridden
+        // by the StatefulAttributesBuilder with calculated values
+        let fct_mint_rate = 0u128; // Will be set by caller
+        let fct_mint_period_l1_data_gas = 0u128; // Will be set by caller
+        
+        Ok(Self::Facet(L1BlockInfoFacet {
             number: l1_header.number,
             time: l1_header.timestamp,
             base_fee: l1_header.base_fee_per_gas.unwrap_or(0),
             block_hash: l1_header.hash_slow(),
             sequence_number,
-            batcher_address: system_config.batcher_address,
-            blob_base_fee: l1_header.blob_fee(blob_fee_config).unwrap_or(1),
-            blob_base_fee_scalar,
-            base_fee_scalar,
+            batcher_address: Address::ZERO, // Facet hardcodes batcher to zero
+            blob_base_fee: 1, // Facet hardcodes blob base fee to 1
+            blob_base_fee_scalar: 1,
+            base_fee_scalar: 0,
             empty_scalars: false,
             l1_fee_overhead: U256::ZERO,
+            fct_mint_rate,
+            fct_mint_period_l1_data_gas,
         }))
     }
 
@@ -179,14 +189,8 @@ impl L1BlockInfoTx {
         let mut selector = [0u8; 4];
         selector.copy_from_slice(&r[0..4]);
         match selector {
-            L1BlockInfoBedrock::L1_INFO_TX_SELECTOR => {
-                L1BlockInfoBedrock::decode_calldata(r).map(Self::Bedrock)
-            }
-            L1BlockInfoEcotone::L1_INFO_TX_SELECTOR => {
-                L1BlockInfoEcotone::decode_calldata(r).map(Self::Ecotone)
-            }
-            L1BlockInfoIsthmus::L1_INFO_TX_SELECTOR => {
-                L1BlockInfoIsthmus::decode_calldata(r).map(Self::Isthmus)
+            L1BlockInfoFacet::L1_INFO_TX_SELECTOR => {
+                L1BlockInfoFacet::decode_calldata(r).map(Self::Facet)
             }
             _ => Err(DecodeError::InvalidSelector),
         }
@@ -195,7 +199,7 @@ impl L1BlockInfoTx {
     /// Returns whether the scalars are empty.
     pub const fn empty_scalars(&self) -> bool {
         match self {
-            Self::Bedrock(_) | Self::Isthmus(..) => false,
+            Self::Bedrock(_) | Self::Isthmus(..) | Self::Facet(..) => false,
             Self::Ecotone(L1BlockInfoEcotone { empty_scalars, .. }) => *empty_scalars,
         }
     }
@@ -206,6 +210,7 @@ impl L1BlockInfoTx {
             Self::Bedrock(tx) => tx.block_hash,
             Self::Ecotone(tx) => tx.block_hash,
             Self::Isthmus(tx) => tx.block_hash,
+            Self::Facet(tx) => tx.block_hash,
         }
     }
 
@@ -215,6 +220,7 @@ impl L1BlockInfoTx {
             Self::Bedrock(bedrock_tx) => bedrock_tx.encode_calldata(),
             Self::Ecotone(ecotone_tx) => ecotone_tx.encode_calldata(),
             Self::Isthmus(isthmus_tx) => isthmus_tx.encode_calldata(),
+            Self::Facet(facet_tx) => facet_tx.encode_calldata(),
         }
     }
 
@@ -223,7 +229,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Ecotone(L1BlockInfoEcotone { number, block_hash, .. }) |
             Self::Bedrock(L1BlockInfoBedrock { number, block_hash, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { number, block_hash, .. }) => {
+            Self::Isthmus(L1BlockInfoIsthmus { number, block_hash, .. }) |
+            Self::Facet(L1BlockInfoFacet { number, block_hash, .. }) => {
                 BlockNumHash { number: *number, hash: *block_hash }
             }
         }
@@ -252,7 +259,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(L1BlockInfoBedrock { base_fee, .. }) |
             Self::Ecotone(L1BlockInfoEcotone { base_fee, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { base_fee, .. }) => U256::from(*base_fee),
+            Self::Isthmus(L1BlockInfoIsthmus { base_fee, .. }) |
+            Self::Facet(L1BlockInfoFacet { base_fee, .. }) => U256::from(*base_fee),
         }
     }
 
@@ -261,7 +269,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(L1BlockInfoBedrock { l1_fee_scalar, .. }) => *l1_fee_scalar,
             Self::Ecotone(L1BlockInfoEcotone { base_fee_scalar, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { base_fee_scalar, .. }) => {
+            Self::Isthmus(L1BlockInfoIsthmus { base_fee_scalar, .. }) |
+            Self::Facet(L1BlockInfoFacet { base_fee_scalar, .. }) => {
                 U256::from(*base_fee_scalar)
             }
         }
@@ -272,7 +281,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(_) => U256::ZERO,
             Self::Ecotone(L1BlockInfoEcotone { blob_base_fee, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { blob_base_fee, .. }) => U256::from(*blob_base_fee),
+            Self::Isthmus(L1BlockInfoIsthmus { blob_base_fee, .. }) |
+            Self::Facet(L1BlockInfoFacet { blob_base_fee, .. }) => U256::from(*blob_base_fee),
         }
     }
 
@@ -281,7 +291,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(_) => U256::ZERO,
             Self::Ecotone(L1BlockInfoEcotone { blob_base_fee_scalar, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { blob_base_fee_scalar, .. }) => {
+            Self::Isthmus(L1BlockInfoIsthmus { blob_base_fee_scalar, .. }) |
+            Self::Facet(L1BlockInfoFacet { blob_base_fee_scalar, .. }) => {
                 U256::from(*blob_base_fee_scalar)
             }
         }
@@ -292,7 +303,7 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(L1BlockInfoBedrock { l1_fee_overhead, .. }) => *l1_fee_overhead,
             Self::Ecotone(L1BlockInfoEcotone { l1_fee_overhead, .. }) => *l1_fee_overhead,
-            Self::Isthmus(_) => U256::ZERO,
+            Self::Isthmus(_) | Self::Facet(_) => U256::ZERO,
         }
     }
 
@@ -301,7 +312,8 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(L1BlockInfoBedrock { batcher_address, .. }) |
             Self::Ecotone(L1BlockInfoEcotone { batcher_address, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { batcher_address, .. }) => *batcher_address,
+            Self::Isthmus(L1BlockInfoIsthmus { batcher_address, .. }) |
+            Self::Facet(L1BlockInfoFacet { batcher_address, .. }) => *batcher_address,
         }
     }
 
@@ -310,8 +322,57 @@ impl L1BlockInfoTx {
         match self {
             Self::Bedrock(L1BlockInfoBedrock { sequence_number, .. }) |
             Self::Ecotone(L1BlockInfoEcotone { sequence_number, .. }) |
-            Self::Isthmus(L1BlockInfoIsthmus { sequence_number, .. }) => *sequence_number,
+            Self::Isthmus(L1BlockInfoIsthmus { sequence_number, .. }) |
+            Self::Facet(L1BlockInfoFacet { sequence_number, .. }) => *sequence_number,
         }
+    }
+    
+    /// Sets the FCT mint rate and cumulative L1 data gas for Facet variants.
+    /// This is used by the StatefulAttributesBuilder to update the L1 block info
+    /// with calculated FCT values after facet deposit processing.
+    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_mint_period_l1_data_gas: u128) {
+        if let Self::Facet(facet) = self {
+            facet.fct_mint_rate = fct_mint_rate;
+            facet.fct_mint_period_l1_data_gas = fct_mint_period_l1_data_gas;
+        }
+    }
+    
+    /// Creates a new [L1BlockInfoTx] and corresponding [TxDeposit] with custom FCT values.
+    /// This is used for Facet chains where FCT mint parameters need to be calculated
+    /// based on the current block's facet deposits.
+    pub fn try_new_with_deposit_tx_and_fct_values(
+        rollup_config: &RollupConfig,
+        system_config: &SystemConfig,
+        sequence_number: u64,
+        l1_header: &Header,
+        l2_block_time: u64,
+        fct_mint_rate: u128,
+        fct_mint_period_l1_data_gas: u128,
+    ) -> Result<(Self, Sealed<TxDeposit>), BlockInfoError> {
+        // Create the L1 info transaction first
+        let mut l1_info =
+            Self::try_new(rollup_config, system_config, sequence_number, l1_header, l2_block_time)?;
+        
+        // Set the FCT values if it's a Facet variant
+        l1_info.set_fct_values(fct_mint_rate, fct_mint_period_l1_data_gas);
+
+        let source = DepositSourceDomain::L1Info(L1InfoDepositSource {
+            l1_block_hash: l1_info.block_hash(),
+            seq_number: sequence_number,
+        });
+
+        let deposit_tx = TxDeposit {
+            source_hash: source.source_hash(),
+            from: L1_INFO_DEPOSITOR_ADDRESS,
+            to: TxKind::Call(Predeploys::L1_BLOCK_INFO),
+            mint: None,
+            value: U256::ZERO,
+            gas_limit: REGOLITH_SYSTEM_TX_GAS,
+            is_system_transaction: false,
+            input: l1_info.encode_calldata(),
+        };
+
+        Ok((l1_info, deposit_tx.seal_slow()))
     }
 }
 
@@ -364,6 +425,17 @@ mod test {
             err.err().unwrap().to_string(),
             "Invalid isthmus data length. Expected 176, got 6"
         );
+
+        let calldata = L1BlockInfoFacet::L1_INFO_TX_SELECTOR
+            .into_iter()
+            .chain([0xde, 0xad])
+            .collect::<Vec<u8>>();
+        let err = L1BlockInfoTx::decode_calldata(&calldata);
+        assert!(err.is_err());
+        assert_eq!(
+            err.err().unwrap().to_string(),
+            "Invalid ecotone data length. Expected 196, got 6"
+        );
     }
 
     #[test]
@@ -384,6 +456,15 @@ mod test {
         assert_eq!(
             ecotone.block_hash(),
             b256!("1c4c84c50740386c7dc081efddd644405f04cde73e30a2e381737acce9f5add3")
+        );
+
+        let facet = L1BlockInfoTx::Facet(L1BlockInfoFacet {
+            block_hash: b256!("2d5d95d6185f4e7c8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d"),
+            ..Default::default()
+        });
+        assert_eq!(
+            facet.block_hash(),
+            b256!("2d5d95d6185f4e7c8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d")
         );
     }
 
@@ -433,6 +514,19 @@ mod test {
                 hash: b256!("4f98b83baf52c498b49bfff33e59965b27da7febbea9a2fcc4719d06dc06932a")
             }
         );
+
+        let facet = L1BlockInfoTx::Facet(L1BlockInfoFacet {
+            number: 202224,
+            block_hash: b256!("5a09a94cbf63d5a9b5a0fff44f6aa76c38b8ffccbfb0b3fdd4820e17ed17a43b"),
+            ..Default::default()
+        });
+        assert_eq!(
+            facet.id(),
+            BlockNumHash {
+                number: 202224,
+                hash: b256!("5a09a94cbf63d5a9b5a0fff44f6aa76c38b8ffccbfb0b3fdd4820e17ed17a43b")
+            }
+        );
     }
 
     #[test]
@@ -454,6 +548,12 @@ mod test {
             ..Default::default()
         });
         assert_eq!(isthmus.sequence_number(), 101112);
+
+        let facet = L1BlockInfoTx::Facet(L1BlockInfoFacet {
+            sequence_number: 202224,
+            ..Default::default()
+        });
+        assert_eq!(facet.sequence_number(), 202224);
     }
 
     #[test]
@@ -469,6 +569,9 @@ mod test {
             ..Default::default()
         });
         assert_eq!(isthmus.operator_fee_constant(), 123);
+
+        let facet = L1BlockInfoTx::Facet(L1BlockInfoFacet::default());
+        assert_eq!(facet.operator_fee_constant(), 0);
     }
 
     #[test]
@@ -484,6 +587,9 @@ mod test {
             ..Default::default()
         });
         assert_eq!(isthmus.operator_fee_scalar(), 123);
+
+        let facet = L1BlockInfoTx::Facet(L1BlockInfoFacet::default());
+        assert_eq!(facet.operator_fee_scalar(), 0);
     }
 
     #[test]

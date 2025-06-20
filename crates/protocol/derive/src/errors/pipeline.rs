@@ -163,6 +163,9 @@ pub enum PipelineEncodingError {
     /// Span Batch Error.
     #[error("{0}")]
     SpanBatchError(#[from] SpanBatchError),
+    /// Facet decode error.
+    #[error("Facet decode error: {0}")]
+    FacetDecodeError(#[from] kona_protocol::FacetDecodeError),
 }
 
 #[cfg(test)]

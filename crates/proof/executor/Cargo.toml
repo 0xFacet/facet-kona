@@ -55,9 +55,14 @@ alloy-provider = { workspace = true, features = ["reqwest"], optional = true }
 alloy-rpc-client = { workspace = true, optional = true }
 alloy-transport = { workspace = true, optional = true }
 alloy-transport-http = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+alloy-rpc-types-eth = { workspace = true, optional = true }
 
 [dev-dependencies]
 kona-executor = { workspace = true, features = ["test-utils"] }
+kona-derive = { workspace = true, features = ["test-utils"] }
+async-trait.workspace = true
 
 [features]
 test-utils = [
@@ -74,6 +79,9 @@ test-utils = [
   "dep:alloy-rpc-client",
   "dep:alloy-transport",
   "dep:alloy-transport-http",
+  "dep:reqwest",
+  "dep:hex",
+  "dep:alloy-rpc-types-eth",
 ]
 
 [package.metadata.cargo-udeps.ignore]

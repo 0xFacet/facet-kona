@@ -81,10 +81,57 @@ where
         let requests_hash = self.config.is_isthmus_active(timestamp).then_some(SHA256_EMPTY);
 
         // Construct the new header.
+        let gas_limit = attrs.gas_limit.ok_or(ExecutorError::MissingGasLimit)?;
+        let beneficiary = attrs.payload_attributes.suggested_fee_recipient;
+        
+        tracing::info!(
+            target: "block_builder",
+            "Building header for block {}: parent_hash={:?}, ommers_hash={:?}, beneficiary={:?}",
+            block_env.number,
+            parent_hash,
+            EMPTY_OMMER_ROOT_HASH,
+            beneficiary
+        );
+        
+        tracing::info!(
+            target: "block_builder",
+            "Header roots: state_root={:?}, transactions_root={:?}, receipts_root={:?}",
+            state_root,
+            transactions_root,
+            receipts_root
+        );
+        
+        tracing::info!(
+            target: "block_builder",
+            "Header fields: gas_limit={}, gas_used={}, timestamp={}, difficulty={}",
+            gas_limit,
+            ex_result.gas_used,
+            timestamp,
+            U256::ZERO
+        );
+        
+        tracing::info!(
+            target: "block_builder",
+            "Header fields: mix_hash={:?}, nonce={:?}, base_fee={}, extra_data={:?}",
+            attrs.payload_attributes.prev_randao,
+            B256::ZERO,
+            block_env.basefee,
+            encoded_base_fee_params
+        );
+        
+        tracing::info!(
+            target: "block_builder",
+            "Cancun fields: withdrawals_root={:?}, blob_gas_used={:?}, excess_blob_gas={:?}, parent_beacon_block_root={:?}",
+            withdrawals_root,
+            blob_gas_used,
+            excess_blob_gas,
+            attrs.payload_attributes.parent_beacon_block_root
+        );
+        
         let header = Header {
             parent_hash,
             ommers_hash: EMPTY_OMMER_ROOT_HASH,
-            beneficiary: attrs.payload_attributes.suggested_fee_recipient,
+            beneficiary,
             state_root,
             transactions_root,
             receipts_root,
@@ -93,7 +140,7 @@ where
             logs_bloom,
             difficulty: U256::ZERO,
             number: block_env.number,
-            gas_limit: attrs.gas_limit.ok_or(ExecutorError::MissingGasLimit)?,
+            gas_limit,
             gas_used: ex_result.gas_used,
             timestamp,
             mix_hash: attrs.payload_attributes.prev_randao,

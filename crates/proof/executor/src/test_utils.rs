@@ -12,6 +12,9 @@ use alloy_transport_http::{Client, Http};
 use kona_genesis::RollupConfig;
 use kona_mpt::{NoopTrieHinter, TrieNode, TrieProvider};
 use kona_registry::ROLLUP_CONFIGS;
+use kona_genesis::{BaseFeeConfig, ChainGenesis, HardForkConfig, SystemConfig};
+use alloy_eips::BlockNumHash;
+use alloy_primitives::{address, b256, U256};
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
 use rocksdb::{DB, Options};
 use serde::{Deserialize, Serialize};
@@ -109,7 +112,12 @@ impl ExecutorTestFixtureCreator {
     /// Create a static test fixture with the configuration provided.
     pub async fn create_static_fixture(self) {
         let chain_id = self.provider.get_chain_id().await.expect("Failed to get chain ID");
-        let rollup_config = ROLLUP_CONFIGS.get(&chain_id).expect("Rollup config not found");
+        let rollup_config = ROLLUP_CONFIGS.get(&chain_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                println!("⚠️  Chain ID {} not found in registry, using custom facet config", chain_id);
+                create_custom_facet_config(chain_id)
+            });
 
         let executing_block = self
             .provider
@@ -130,15 +138,44 @@ impl ExecutorTestFixtureCreator {
         let encoded_executing_transactions = match executing_block.transactions {
             BlockTransactions::Hashes(transactions) => {
                 let mut encoded_transactions = Vec::with_capacity(transactions.len());
-                for tx_hash in transactions {
+                for (i, tx_hash) in transactions.iter().enumerate() {
                     let tx = self
                         .provider
                         .client()
-                        .request::<&[B256; 1], Bytes>("debug_getRawTransaction", &[tx_hash])
+                        .request::<&[B256; 1], Bytes>("debug_getRawTransaction", &[*tx_hash])
                         .await
                         .expect("Block not found");
+                    
+                    // Debug logging
+                    println!("=== GETH Transaction {} (hash: {}) ===", i, tx_hash);
+                    println!("  Raw length: {} bytes", tx.len());
+                    println!("  First 40 bytes: {:02x?}", &tx[..40.min(tx.len())]);
+                    
+                    // Try to identify transaction type
+                    if tx.len() > 0 {
+                        match tx[0] {
+                            0x7e => {
+                                println!("  Type: DEPOSIT (0x7e)");
+                                // Also fetch the transaction details to see mint value
+                                let tx_details: serde_json::Value = self
+                                    .provider
+                                    .client()
+                                    .request("eth_getTransactionByHash", &[*tx_hash])
+                                    .await
+                                    .expect("Failed to get transaction details");
+                                if let Some(mint) = tx_details.get("mint") {
+                                    println!("  Mint value from Geth: {}", mint);
+                                }
+                            },
+                            0x02 => println!("  Type: EIP-1559 (0x02)"),
+                            0x01 => println!("  Type: EIP-2930 (0x01)"),
+                            _ => println!("  Type: Unknown or Legacy (0x{:02x})", tx[0]),
+                        }
+                    }
+                    
                     encoded_transactions.push(tx);
                 }
+                println!("=== Total transactions from Geth: {} ===\n", encoded_transactions.len());
                 encoded_transactions
             }
             _ => panic!("Only BlockTransactions::Hashes are supported."),
@@ -173,7 +210,7 @@ impl ExecutorTestFixtureCreator {
         };
 
         let mut executor = StatelessL2Builder::new(
-            rollup_config,
+            &rollup_config,
             OpEvmFactory::default(),
             self,
             NoopTrieHinter,
@@ -181,6 +218,21 @@ impl ExecutorTestFixtureCreator {
         );
         let outcome = executor.build_block(payload_attrs).expect("Failed to execute block");
 
+        // Debug: Print execution details
+        println!("\n=== Execution Results ===");
+        println!("Gas used: {} (expected: {})", outcome.execution_result.gas_used, executing_header.gas_used);
+        println!("Receipts count: {}", outcome.execution_result.receipts.len());
+        
+        // Print receipt details to see gas usage per transaction
+        for (i, receipt) in outcome.execution_result.receipts.iter().enumerate() {
+            println!("\nReceipt {}: {:?}", i, receipt);
+        }
+        
+        // Print state root comparison
+        println!("\n=== State Root Comparison ===");
+        println!("Kona state root:  {:?}", outcome.header.state_root);
+        println!("Geth state root:  {:?}", executing_header.state_root);
+        
         assert_eq!(
             outcome.header.inner(),
             &executing_header.inner,
@@ -362,4 +414,60 @@ pub enum TestTrieNodeProviderError {
     /// Failed to write back to the key-value store.
     #[error("Failed to write back to key value store")]
     KVStore,
+}
+
+/// Creates a custom rollup config for the facet chain when not found in registry
+fn create_custom_facet_config(chain_id: u64) -> RollupConfig {
+    RollupConfig {
+        genesis: ChainGenesis {
+            l1: BlockNumHash {
+                hash: b256!("0x481724ee99b1f4cb71d826e2ec5a37265f460e9b112315665c977f4050b0af54"),
+                number: 10,
+            },
+            l2: BlockNumHash {
+                hash: b256!("0x88aedfbf7dea6bfa2c4ff315784ad1a7f145d8f650969359c003bbed68c87631"),
+                number: 0,
+            },
+            l2_time: 1725557164,
+            system_config: Some(SystemConfig {
+                batcher_address: address!("c81f87a644b41e49b3221f41251f15c6cb00ce03"),
+                overhead: U256::ZERO,
+                scalar: U256::from(1_000_000u64),
+                gas_limit: 30_000_000,
+                base_fee_scalar: Some(1368),
+                blob_base_fee_scalar: Some(810949),
+                ..Default::default()
+            }),
+        },
+        l1_chain_id: 1, // Ethereum mainnet
+        l2_chain_id: chain_id,
+        block_time: 12,
+        max_sequencer_drift: 600,
+        seq_window_size: 3600,
+        channel_timeout: 300,
+        hardforks: HardForkConfig {
+            regolith_time: Some(0),
+            canyon_time: Some(0),
+            delta_time: Some(0),
+            ecotone_time: Some(0),
+            fjord_time: Some(0),
+            isthmus_time: None,
+            ..Default::default()
+        },
+        batch_inbox_address: address!("ff00000000000000000000000000000000042069"),
+        deposit_contract_address: address!("08073dc48dde578137b8af042bcbc1c2491f1eb2"),
+        l1_system_config_address: address!("94ee52a9d8edd72a85dea7fae3ba6d75e4bf1710"),
+        protocol_versions_address: address!("0000000000000000000000000000000000000000"),
+        superchain_config_address: Some(address!("0000000000000000000000000000000000000000")),
+        da_challenge_address: Some(address!("0000000000000000000000000000000000000000")),
+        blobs_enabled_l1_timestamp: None,
+        granite_channel_timeout: 50,
+        interop_message_expiry_window: 3600,
+        alt_da_config: None,
+        chain_op_config: BaseFeeConfig {
+            eip1559_elasticity: 2,
+            eip1559_denominator: 8,
+            eip1559_denominator_canyon: 8,
+        },
+    }
 }

@@ -8,7 +8,7 @@ use kona_genesis::{RollupConfig, SystemConfig};
 use op_alloy_consensus::OpBlock;
 
 use crate::{
-    L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus, L1BlockInfoTx,
+    L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus, info::L1BlockInfoFacet, L1BlockInfoTx,
     OpBlockConversionError, SpanBatchError, SpanDecodingError,
 };
 
@@ -46,6 +46,11 @@ pub fn to_system_config(
             ..
         }) |
         L1BlockInfoTx::Isthmus(L1BlockInfoIsthmus {
+            base_fee_scalar,
+            blob_base_fee_scalar,
+            ..
+        }) |
+        L1BlockInfoTx::Facet(L1BlockInfoFacet {
             base_fee_scalar,
             blob_base_fee_scalar,
             ..

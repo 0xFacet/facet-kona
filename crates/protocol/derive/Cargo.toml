@@ -27,6 +27,7 @@ alloy-primitives = { workspace = true, features = ["rlp", "k256", "map"] }
 # Op Alloy
 op-alloy-rpc-types-engine.workspace = true
 op-alloy-consensus = { workspace = true, features = ["k256"] }
+op-alloy-network.workspace = true
 
 # General
 tracing.workspace = true
@@ -50,6 +51,21 @@ tracing = { workspace = true, features = ["std"] }
 alloy-primitives = { workspace = true, features = ["rlp", "k256", "map", "arbitrary"] }
 op-alloy-consensus = { workspace = true, features = ["k256"] }
 
+# For examples
+alloy-provider.workspace = true
+alloy-rpc-types.workspace = true
+alloy-rpc-types-eth.workspace = true
+kona-providers-alloy.workspace = true
+clap.workspace = true
+eyre.workspace = true
+url.workspace = true
+
+# For REVM execution tests
+kona-executor.workspace = true
+kona-mpt.workspace = true
+alloy-evm.workspace = true
+alloy-op-evm.workspace = true
+
 [features]
 default = []
 serde = [
@@ -64,6 +80,30 @@ test-utils = [
   "dep:spin",
   "dep:tracing-subscriber",
 ]
+
+[[example]]
+name = "derive_blocks"
+path = "examples/derive_blocks.rs"
+
+[[example]]
+name = "simple_derive_test"
+path = "examples/simple_derive_test.rs"
+
+[[example]]
+name = "test_facet_derivation"
+path = "examples/test_facet_derivation.rs"
+
+[[example]]
+name = "derive_blocks_fixed"
+path = "examples/derive_blocks_fixed.rs"
+
+[[example]]
+name = "test_derivation_simple"
+path = "examples/test_derivation_simple.rs"
+
+[[example]]
+name = "working_derivation_test"
+path = "examples/working_derivation_test.rs"
 
 [package.metadata.cargo-udeps.ignore]
 # `kona-derive` is self-referenced in dev-dependencies to always enable the `test-utils` feature in `cfg(test)`.

@@ -296,6 +296,13 @@ impl RollupConfig {
             !self.is_isthmus_active(timestamp.saturating_sub(self.block_time))
     }
 
+    /// Returns true if this is the Facet chain.
+    /// - Mainnet: chain ID 1027303 (0xface7)
+    /// - Sepolia: chain ID 16436858 (0xface7a)
+    pub fn is_facet(&self) -> bool {
+        self.l2_chain_id == 1027303 || self.l2_chain_id == 16436858
+    }
+
     /// Returns true if Interop is active at the given timestamp.
     pub fn is_interop_active(&self, timestamp: u64) -> bool {
         self.hardforks.interop_time.is_some_and(|t| timestamp >= t)

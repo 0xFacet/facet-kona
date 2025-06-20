@@ -12,5 +12,8 @@ pub use bedrock::L1BlockInfoBedrock;
 mod ecotone;
 pub use ecotone::L1BlockInfoEcotone;
 
+mod facet;
+pub use facet::L1BlockInfoFacet;
+
 mod errors;
 pub use errors::{BlockInfoError, DecodeError};

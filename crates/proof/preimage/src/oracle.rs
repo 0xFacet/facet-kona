@@ -26,12 +26,16 @@ where
     async fn write_key(&self, key: PreimageKey) -> PreimageOracleResult<usize> {
         // Write the key to the host so that it can prepare the preimage.
         let key_bytes: [u8; 32] = key.into();
+        trace!(target: "oracle_client", "Writing key to oracle: {key}");
         self.channel.write(&key_bytes).await?;
 
         // Read the length prefix and reset the cursor.
         let mut length_buffer = [0u8; 8];
+        trace!(target: "oracle_client", "Reading length prefix for key: {key}");
         self.channel.read_exact(&mut length_buffer).await?;
-        Ok(u64::from_be_bytes(length_buffer) as usize)
+        let length = u64::from_be_bytes(length_buffer) as usize;
+        trace!(target: "oracle_client", "Received length prefix: {length} bytes for key: {key}");
+        Ok(length)
     }
 }
 
@@ -124,9 +128,15 @@ where
 
         // Fetch the preimage value from the preimage getter.
         let value = fetcher.get_preimage(preimage_key).await?;
+        let value_len = value.len();
+        trace!(target: "oracle_server", "Fetched preimage of size {value_len} bytes for key {preimage_key}");
 
         // Write the length as a big-endian u64 followed by the data.
-        self.channel.write(value.len().to_be_bytes().as_ref()).await?;
+        let length_bytes = value_len.to_be_bytes();
+        trace!(target: "oracle_server", "Writing length prefix: {value_len} bytes");
+        self.channel.write(length_bytes.as_ref()).await?;
+        
+        trace!(target: "oracle_server", "Writing preimage data: {value_len} bytes");
         self.channel.write(value.as_ref()).await?;
 
         trace!(target: "oracle_server", "Successfully wrote preimage data for key {preimage_key}");
