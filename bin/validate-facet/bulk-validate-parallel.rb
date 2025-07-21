@@ -8,6 +8,7 @@ require 'optparse'
 require 'open3'
 require 'timeout'
 require 'ostruct'
+require 'set'
 
 class FacetBulkValidator
   attr_reader :options, :output_dir, :results_file, :start_time
@@ -113,6 +114,24 @@ class FacetBulkValidator
       puts "♻️  Resume: Skipping #{processed.size} already processed blocks"
     end
     
+    # Handle exclude-success option
+    if options[:exclude_success_from] && File.exist?(options[:exclude_success_from])
+      successful_blocks = Set.new
+      File.foreach(options[:exclude_success_from]) do |line|
+        begin
+          result = JSON.parse(line)
+          successful_blocks << result['block'] if result['success']
+        rescue JSON::ParserError
+          # Skip invalid lines
+        end
+      end
+      
+      original_count = blocks.length
+      blocks = blocks.reject { |b| successful_blocks.include?(b) }
+      puts "🚫 Excluding #{successful_blocks.size} previously successful blocks from #{options[:exclude_success_from]}"
+      puts "   Remaining blocks to validate: #{blocks.length}"
+    end
+    
     if blocks.empty?
       puts "\n✅ No blocks to process!"
     else
@@ -151,8 +170,14 @@ class FacetBulkValidator
         env = { 
           "DATA_DIR" => data_dir,
           "RUST_LOG" => "warn",  # Use warn level for now
-          "RUST_BACKTRACE" => "0"
-        }
+          "RUST_BACKTRACE" => "0",
+          # Pass through RPC environment variables
+          "L1_RPC" => ENV["L1_RPC"],
+          "L1_BEACON_RPC" => ENV["L1_BEACON_RPC"],
+          "L2_RPC" => ENV["L2_RPC"],
+          "ROLLUP_NODE_RPC" => ENV["ROLLUP_NODE_RPC"],
+          "L1_NETWORK" => ENV["L1_NETWORK"]
+        }.compact  # Remove nil values
         
         # Initialize variables
         stdout = ""
@@ -161,12 +186,12 @@ class FacetBulkValidator
         
         # Run with timeout to prevent hanging
         begin
-          Timeout::timeout(60) do  # 60 second timeout
+          Timeout::timeout(180) do  # 180 second timeout
             stdout, stderr, status = Open3.capture3(env, "./bin/validate-facet/validate-facet.sh #{block_number}")
           end
         rescue Timeout::Error
           stdout = ""
-          stderr = "Validation timed out after 60 seconds"
+          stderr = "Validation timed out after 180 seconds"
           # Create a fake status object that behaves like Process::Status
           status = Object.new
           def status.success?
@@ -385,7 +410,8 @@ options = {
   random_sample: nil,
   random_seed: 42,
   resume: false,
-  output_dir: nil
+  output_dir: nil,
+  exclude_success_from: nil
 }
 
 OptionParser.new do |opts|
@@ -436,6 +462,10 @@ OptionParser.new do |opts|
     options[:resume] = true
   end
   
+  opts.on("--exclude-success-from FILE", "Skip blocks that were successful in the specified results.jsonl file") do |v|
+    options[:exclude_success_from] = v
+  end
+  
   opts.separator ""
   opts.separator "Other:"
   
@@ -449,6 +479,7 @@ OptionParser.new do |opts|
   opts.separator "  #{$0} --start 100 --end 200 --jobs 8"
   opts.separator "  #{$0} --start 1 --end 1000 --sample-rate 10"
   opts.separator "  #{$0} --start 1 --end 10000 --random 100 --jobs 16"
+  opts.separator "  #{$0} --start 1 --end 1000 --exclude-success-from validation_20250720_122657/results.jsonl"
 end.parse!
 
 # Check dependencies

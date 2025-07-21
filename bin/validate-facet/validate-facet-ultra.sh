@@ -8,7 +8,13 @@ export RUST_BACKTRACE=0
 # Cache rollup config in memory
 if [ -z "${ROLLUP_CONFIG_CACHED:-}" ]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    export ROLLUP_CONFIG_CACHED="$SCRIPT_DIR/facet-rollup-config.json"
+    # Determine which config to use based on L1_NETWORK env var
+    L1_NETWORK="${L1_NETWORK:-mainnet}"
+    if [ "$L1_NETWORK" = "mainnet" ]; then
+        export ROLLUP_CONFIG_CACHED="$SCRIPT_DIR/facet-mainnet-rollup-config.json"
+    else
+        export ROLLUP_CONFIG_CACHED="$SCRIPT_DIR/facet-sepolia-rollup-config.json"
+    fi
     export L2_CHAIN_ID_CACHED=$(jq -r '.l2_chain_id' < "$ROLLUP_CONFIG_CACHED")
 fi
 
@@ -27,28 +33,35 @@ KONA_BIN="${KONA_HOST_BIN:-./target/release/kona-host}"
 DATA_DIR="${DATA_DIR:-/tmp/kona_$$_${BLOCK_NUMBER}}"
 trap "rm -rf $DATA_DIR" EXIT
 
-# Batch ALL RPC calls into one
+# Batch RPC calls to rollup node
 PREV_BLOCK=$((BLOCK_NUMBER - 1))
-BATCH='[
+ROLLUP_BATCH='[
   {"jsonrpc":"2.0","id":1,"method":"optimism_outputAtBlock","params":["'$(printf "0x%x" $BLOCK_NUMBER)'"]},
-  {"jsonrpc":"2.0","id":2,"method":"optimism_outputAtBlock","params":["'$(printf "0x%x" $PREV_BLOCK)'"]},
-  {"jsonrpc":"2.0","id":3,"method":"eth_getBlockByNumber","params":["'$(printf "0x%x" $PREV_BLOCK)'",false]}
+  {"jsonrpc":"2.0","id":2,"method":"optimism_outputAtBlock","params":["'$(printf "0x%x" $PREV_BLOCK)'"]}
 ]'
 
-# Single batch call
-RESPONSE=$(curl -s --compressed -X POST "$ROLLUP_NODE_RPC" \
+# Batch call to rollup node
+ROLLUP_RESPONSE=$(curl -s --compressed -X POST "$ROLLUP_NODE_RPC" \
   -H "Content-Type: application/json" \
   -H "Connection: keep-alive" \
-  -d "$BATCH")
+  -d "$ROLLUP_BATCH")
 
-# Parse all values at once
-eval $(echo "$RESPONSE" | jq -r '
+# Separate call to L2 node for block data
+L2_BLOCK_RESPONSE=$(curl -s --compressed -X POST "$L2_RPC" \
+  -H "Content-Type: application/json" \
+  -H "Connection: keep-alive" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["'$(printf "0x%x" $PREV_BLOCK)'",false]}')
+
+# Parse rollup node response
+eval $(echo "$ROLLUP_RESPONSE" | jq -r '
   def find_by_id(id): map(select(.id == id)) | .[0];
   "CLAIMED_L2_OUTPUT_ROOT=" + (find_by_id(1).result.outputRoot // "error") + "\n" +
   "L1_ORIGIN_NUM=" + (find_by_id(2).result.blockRef.l1origin.number | tostring) + "\n" +
-  "AGREED_L2_OUTPUT_ROOT=" + (find_by_id(2).result.outputRoot // "error") + "\n" +
-  "AGREED_L2_HEAD_HASH=" + (find_by_id(3).result.hash // "error")
+  "AGREED_L2_OUTPUT_ROOT=" + (find_by_id(2).result.outputRoot // "error")
 ')
+
+# Parse L2 block response
+AGREED_L2_HEAD_HASH=$(echo "$L2_BLOCK_RESPONSE" | jq -r '.result.hash // "error"')
 
 # Get L1 head
 L1_TARGET=$((L1_ORIGIN_NUM + 30))
@@ -58,8 +71,8 @@ L1_HEAD=$(curl -s --compressed -X POST "$L1_RPC" \
   -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"eth_getBlockByNumber\",\"params\":[\"$(printf "0x%x" $L1_TARGET)\",false]}" \
   | jq -r .result.hash)
 
-# Direct execution, no output unless error
-exec "$KONA_BIN" -vv single \
+# Run kona-host and surface result
+if "$KONA_BIN" -vv single \
   --l1-head "$L1_HEAD" \
   --agreed-l2-head-hash "$AGREED_L2_HEAD_HASH" \
   --claimed-l2-output-root "$CLAIMED_L2_OUTPUT_ROOT" \
@@ -71,3 +84,10 @@ exec "$KONA_BIN" -vv single \
   --l2-node-address "$L2_RPC" \
   --native \
   --data-dir "$DATA_DIR" 2>&1
+then
+  echo "Successfully validated L2 block $BLOCK_NUMBER"
+  exit 0
+else
+  echo "Validation failed for block $BLOCK_NUMBER" >&2
+  exit 1
+fi
