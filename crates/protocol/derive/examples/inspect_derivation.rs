@@ -66,7 +66,7 @@ async fn create_facet_rollup_config() -> Result<RollupConfig> {
 
 /// Inspect FCT values from L1BlockInfoTx
 fn inspect_l1_block_info_tx(tx_bytes: &[u8]) -> Result<()> {
-    // Skip the 0x7e prefix
+    // Skip the 0x7d prefix
     let deposit_data = &tx_bytes[1..];
     let deposit_tx = TxDeposit::decode_2718(&mut &deposit_data[..])?;
     

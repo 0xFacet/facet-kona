@@ -79,7 +79,8 @@ async fn main() -> Result<()> {
     for (i, tx) in actual_txs.iter().enumerate() {
         let tx_bytes = tx.inner.inner.encoded_2718();
         let tx_type = match tx_bytes.get(0) {
-            Some(0x7e) => "DEPOSIT (0x7e)",
+            Some(0x7e) => panic!("Legacy deposit transaction type 0x7e is not supported. Only Bluebird deposits (0x7d) are supported."),
+            Some(0x7d) => "DEPOSIT (0x7d - Bluebird)",
             Some(0x02) => "EIP-1559 (0x02)",
             Some(0x01) => "EIP-2930 (0x01)",
             _ => "LEGACY",
