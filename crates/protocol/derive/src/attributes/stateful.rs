@@ -1,21 +1,21 @@
 //! The [`AttributesBuilder`] and it's default implementation.
 
 use crate::{
-    errors::{BuilderError, PipelineEncodingError, PipelineError, PipelineErrorKind},
+    errors::{BuilderError, PipelineError, PipelineErrorKind},
     traits::{AttributesBuilder, ChainProvider, L2ChainProvider},
     types::PipelineResult,
 };
 use alloc::{boxed::Box, fmt::Debug, format, string::ToString, sync::Arc, vec, vec::Vec};
-use alloy_consensus::{Eip658Value, Receipt, Transaction};
+use alloy_consensus::Transaction;
 use alloy_eips::{BlockNumHash, eip2718::Encodable2718};
-use alloy_primitives::{Address, B256, Bytes};
+use alloy_primitives::{Address, Bytes};
 use alloy_rlp::Encodable;
 use alloy_rpc_types_engine::PayloadAttributes;
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
 use kona_hardforks::{Hardfork, Hardforks};
 use kona_protocol::{
-    decode_deposit, FctMintCalculator, L1BlockInfoTx, L2BlockInfo, Predeploys, DEPOSIT_EVENT_ABI_HASH
+    L1BlockInfoTx, L2BlockInfo
 };
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
 use crate::derive_facet_deposits;
@@ -65,7 +65,7 @@ where
             l2_parent.l1_origin.number,
             epoch.number
         );
-        let l1_header;
+        let l1_header: alloy_consensus::Header;
         let deposit_transactions: Vec<Bytes>;
 
         let mut sys_config = self
@@ -75,11 +75,13 @@ where
             .map_err(Into::into)?;
 
         // Initialize FCT values - will be updated if processing facet deposits
-        let mut new_fct_mint_rate: u128;
-        let mut new_fct_mint_period_l1_data_gas: u128;
+        let new_fct_mint_rate: u128;
+        let new_fct_total_minted: u128;
+        let new_fct_period_start_block: u64;
+        let new_fct_period_minted: u128;
         
-        // Read facet parameters from parent block (needed for both new and continuing epochs)
-        let (parent_fct_mint_rate, parent_fct_mint_period_l1_data_gas) = if l2_parent.block_info.number > 0 {
+        // Read parent L1 info from parent block (needed for both new and continuing epochs)
+        let parent_l1_info = if l2_parent.block_info.number > 0 {
             // Fetch parent block to get facet parameters
             let parent_block = self
                 .config_fetcher
@@ -97,13 +99,12 @@ where
                 .map_err(|e| PipelineError::AttributesBuilder(BuilderError::Custom(format!("Failed to decode L1 info: {}", e))).crit())?;
             
             match l1_info {
-                L1BlockInfoTx::Facet(facet_info) => {
-                    (facet_info.fct_mint_rate, facet_info.fct_mint_period_l1_data_gas)
-                }
+                L1BlockInfoTx::Facet(facet_info) => Some(facet_info),
                 _ => return Err(PipelineError::AttributesBuilder(BuilderError::Custom("Parent block is not using Facet L1 info variant".to_string())).crit()),
             }
         } else {
-            (FctMintCalculator::INITIAL_RATE, 0u128)
+            // For genesis block, return None - we'll create default values
+            None
         };
 
         // If the L1 origin changed in this block, then we are in the first block of the epoch.
@@ -145,13 +146,39 @@ where
                 receipts.len()
             );
             
-            let (deposits, rate, cumulative_gas) = derive_facet_deposits(
+            l1_header = header;
+            
+            // Get L1 base fee from header
+            let l1_base_fee = l1_header.base_fee_per_gas.unwrap_or(0);
+            
+            // Get parent L1 info for FCT state - use the one we loaded earlier or create default
+            let parent_l1_info_data = parent_l1_info.unwrap_or(kona_protocol::L1BlockInfoFacet {
+                number: 0,
+                time: 0,
+                base_fee: 0,
+                block_hash: Default::default(),
+                sequence_number: 0,
+                batcher_address: Default::default(),
+                blob_base_fee: 0,
+                blob_base_fee_scalar: 0,
+                base_fee_scalar: 0,
+                empty_scalars: false,
+                l1_fee_overhead: Default::default(),
+                fct_mint_rate: self.rollup_cfg.fct_initial_rate
+                    .and_then(|rate| rate.try_into().ok())
+                    .unwrap_or(0u128),
+                fct_total_minted: 0,
+                fct_period_start_block: 0,
+                fct_period_minted: 0,
+            });
+            
+            let (deposits, rate, total_minted, period_start_block, period_minted) = derive_facet_deposits(
                 &txs,
                 &receipts,
                 self.rollup_cfg.l2_chain_id,
                 l2_parent.block_info.number + 1, // Next L2 block number
-                parent_fct_mint_rate,
-                parent_fct_mint_period_l1_data_gas,
+                l1_base_fee,
+                &parent_l1_info_data,
             )
             .map_err(|e| PipelineError::BadEncoding(e).crit())?;
             
@@ -164,15 +191,16 @@ where
             
             // Update FCT values
             new_fct_mint_rate = rate;
-            new_fct_mint_period_l1_data_gas = cumulative_gas;
+            new_fct_total_minted = total_minted;
+            new_fct_period_start_block = period_start_block;
+            new_fct_period_minted = period_minted;
             sys_config
                 .update_with_receipts(
                     &receipts,
                     self.rollup_cfg.l1_system_config_address,
-                    self.rollup_cfg.is_ecotone_active(header.timestamp),
+                    self.rollup_cfg.is_ecotone_active(l1_header.timestamp),
                 )
                 .map_err(|e| PipelineError::SystemConfigUpdate(e).crit())?;
-            l1_header = header;
             deposit_transactions = deposits;
             0
         } else {
@@ -196,8 +224,20 @@ where
             l1_header = header;
             deposit_transactions = vec![];
             // Preserve parent FCT values when not processing deposits
-            new_fct_mint_rate = parent_fct_mint_rate;
-            new_fct_mint_period_l1_data_gas = parent_fct_mint_period_l1_data_gas;
+            if let Some(parent_info) = parent_l1_info {
+                new_fct_mint_rate = parent_info.fct_mint_rate;
+                new_fct_total_minted = parent_info.fct_total_minted;
+                new_fct_period_start_block = parent_info.fct_period_start_block;
+                new_fct_period_minted = parent_info.fct_period_minted;
+            } else {
+                // Genesis case
+                new_fct_mint_rate = self.rollup_cfg.fct_initial_rate
+                    .and_then(|rate| rate.try_into().ok())
+                    .unwrap_or(0u128);
+                new_fct_total_minted = 0;
+                new_fct_period_start_block = 0;
+                new_fct_period_minted = 0;
+            }
             l2_parent.seq_num + 1
         };
 
@@ -238,19 +278,21 @@ where
             upgrade_transactions.append(&mut Hardforks::INTEROP.txs().collect());
         }
 
-        // Build and encode the L1 info transaction for the current payload with FCT values.
-        let (_, l1_info_tx_envelope) = L1BlockInfoTx::try_new_with_deposit_tx_and_fct_values(
+        // Build and encode the L1 info transaction for the current payload.
+        let (mut l1_info_tx, l1_info_tx_envelope) = L1BlockInfoTx::try_new_with_deposit_tx(
             &self.rollup_cfg,
             &sys_config,
             sequence_number,
             &l1_header,
             next_l2_time,
-            new_fct_mint_rate,
-            new_fct_mint_period_l1_data_gas,
         )
         .map_err(|e| {
             PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit()
         })?;
+        
+        // Set the FCT values on the L1 info transaction
+        l1_info_tx.set_fct_values(new_fct_mint_rate, new_fct_total_minted, new_fct_period_start_block, new_fct_period_minted);
+        
         let mut encoded_l1_info_tx = Vec::with_capacity(l1_info_tx_envelope.length());
         l1_info_tx_envelope.encode_2718(&mut encoded_l1_info_tx);
 

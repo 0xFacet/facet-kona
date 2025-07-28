@@ -53,10 +53,14 @@ pub struct L1BlockInfoFacet {
     ///
     /// This field is deprecated in the Ecotone Hardfork.
     pub l1_fee_overhead: U256,
-    /// The facet mint rate (uint128)
+    /// The facet mint rate (wei/gas)
     pub fct_mint_rate: u128,
-    /// The facet mint period L1 data gas (uint128)
-    pub fct_mint_period_l1_data_gas: u128,
+    /// Total FCT minted across all periods
+    pub fct_total_minted: u128,
+    /// Block number when current period started
+    pub fct_period_start_block: u64,
+    /// FCT minted in current period
+    pub fct_period_minted: u128,
 }
 
 impl L1BlockInfoFacet {
@@ -64,7 +68,8 @@ impl L1BlockInfoFacet {
     pub const L1_SCALAR: u8 = 1;
 
     /// The length of an L1 info transaction in Facet.
-    pub const L1_INFO_TX_LEN: usize = 4 + 32 * 5 + 16 + 16;
+    /// 4 (selector) + 32*5 (base fields) + 16 (fct_mint_rate) + 16 (fct_total_minted) + 8 (fct_period_start_block) + 16 (fct_period_minted)
+    pub const L1_INFO_TX_LEN: usize = 4 + 32 * 5 + 16 + 16 + 8 + 16;
 
     /// The 4 byte selector of "setL1BlockValuesEcotone()"
     pub const L1_INFO_TX_SELECTOR: [u8; 4] = [0x44, 0x0a, 0x5e, 0x20];
@@ -82,9 +87,11 @@ impl L1BlockInfoFacet {
         buf.extend_from_slice(U256::from(self.blob_base_fee).to_be_bytes::<32>().as_ref());
         buf.extend_from_slice(self.block_hash.as_ref());
         buf.extend_from_slice(self.batcher_address.into_word().as_ref());
-        // Facet-specific fields - note the order matches Ruby implementation
-        buf.extend_from_slice(self.fct_mint_period_l1_data_gas.to_be_bytes().as_ref());
+        // Facet-specific fields
         buf.extend_from_slice(self.fct_mint_rate.to_be_bytes().as_ref());
+        buf.extend_from_slice(self.fct_total_minted.to_be_bytes().as_ref());
+        buf.extend_from_slice(self.fct_period_start_block.to_be_bytes().as_ref());
+        buf.extend_from_slice(self.fct_period_minted.to_be_bytes().as_ref());
         // Notice: do not include the `empty_scalars` field in the calldata.
         // Notice: do not include the `l1_fee_overhead` field in the calldata.
         buf.into()
@@ -139,14 +146,24 @@ impl L1BlockInfoFacet {
 
         // Facet-specific fields
         // SAFETY: 16 bytes are copied directly into the array
-        let mut fct_mint_period_l1_data_gas = [0u8; 16];
-        fct_mint_period_l1_data_gas.copy_from_slice(&r[164..180]);
-        let fct_mint_period_l1_data_gas = u128::from_be_bytes(fct_mint_period_l1_data_gas);
+        let mut fct_mint_rate = [0u8; 16];
+        fct_mint_rate.copy_from_slice(&r[164..180]);
+        let fct_mint_rate = u128::from_be_bytes(fct_mint_rate);
 
         // SAFETY: 16 bytes are copied directly into the array
-        let mut fct_mint_rate = [0u8; 16];
-        fct_mint_rate.copy_from_slice(&r[180..196]);
-        let fct_mint_rate = u128::from_be_bytes(fct_mint_rate);
+        let mut fct_total_minted = [0u8; 16];
+        fct_total_minted.copy_from_slice(&r[180..196]);
+        let fct_total_minted = u128::from_be_bytes(fct_total_minted);
+        
+        // SAFETY: 8 bytes are copied directly into the array
+        let mut fct_period_start_block = [0u8; 8];
+        fct_period_start_block.copy_from_slice(&r[196..204]);
+        let fct_period_start_block = u64::from_be_bytes(fct_period_start_block);
+        
+        // SAFETY: 16 bytes are copied directly into the array
+        let mut fct_period_minted = [0u8; 16];
+        fct_period_minted.copy_from_slice(&r[204..220]);
+        let fct_period_minted = u128::from_be_bytes(fct_period_minted);
 
         Ok(Self {
             number,
@@ -165,7 +182,9 @@ impl L1BlockInfoFacet {
             // Notice: the `l1_fee_overhead` field is not included in the calldata.
             l1_fee_overhead: U256::ZERO,
             fct_mint_rate,
-            fct_mint_period_l1_data_gas,
+            fct_total_minted,
+            fct_period_start_block,
+            fct_period_minted,
         })
     }
 }
@@ -199,7 +218,9 @@ mod tests {
             empty_scalars: false,
             l1_fee_overhead: U256::ZERO,
             fct_mint_rate: 1000,
-            fct_mint_period_l1_data_gas: 2000,
+            fct_total_minted: 2000,
+            fct_period_start_block: 0,
+            fct_period_minted: 500,
         };
 
         let calldata = info.encode_calldata();
