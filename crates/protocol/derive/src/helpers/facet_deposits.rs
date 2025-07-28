@@ -6,8 +6,8 @@ use kona_protocol::{decode_facet_payload, alias_l1_to_l2, FACET_INBOX_ADDRESS, F
 use op_alloy_consensus::TxDeposit;
 use crate::errors::PipelineEncodingError;
 
-/// Encode a deposit transaction with the Bluebird type byte (0x7d)
-fn encode_deposit_with_bluebird_type(deposit: &TxDeposit) -> Vec<u8> {
+/// Encode a deposit transaction with the Facet deposit type byte (0x7d)
+fn encode_deposit_with_facet_type(deposit: &TxDeposit) -> Vec<u8> {
     let mut out = Vec::with_capacity(deposit.eip2718_encoded_length() + 1);
     out.push(DEPOSIT_TX_TYPE);
     deposit.encode_2718(&mut out);
@@ -182,7 +182,7 @@ pub fn derive_facet_deposits(
     let mut out = Vec::with_capacity(facet_payloads.len());
     for (payload, from, source_hash) in facet_payloads {
         let dep = payload.into_deposit(from, source_hash);
-        let buf = encode_deposit_with_bluebird_type(&dep);
+        let buf = encode_deposit_with_facet_type(&dep);
         out.push(buf.into());
     }
     

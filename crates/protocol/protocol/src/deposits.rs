@@ -179,7 +179,7 @@ pub fn decode_deposit(block_hash: B256, index: usize, log: &Log) -> Result<Bytes
 
     unmarshal_deposit_version0(&mut deposit_tx, to, opaque_data)?;
 
-    // Re-encode the deposit transaction with Bluebird type byte
+    // Re-encode the deposit transaction with Facet deposit type byte
     let mut buffer = Vec::with_capacity(deposit_tx.eip2718_encoded_length() + 1);
     buffer.push(DEPOSIT_TX_TYPE);
     deposit_tx.encode_2718(&mut buffer);

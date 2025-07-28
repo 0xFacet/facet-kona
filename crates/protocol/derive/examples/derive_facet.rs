@@ -39,7 +39,7 @@ fn main() {
         
         // Show basic deposit transaction info
         if dep.len() > 1 && dep[0] == 0x7d {
-            println!("  - Type: 0x7d (Deposit transaction - Bluebird)");
+            println!("  - Type: 0x7d (Facet deposit transaction)");
             println!("  - Length: {} bytes", dep.len());
             println!("  - Successfully encoded for L2 submission");
         }
@@ -89,7 +89,7 @@ fn main() {
         
         // Show basic deposit transaction info
         if dep.len() > 1 && dep[0] == 0x7d {
-            println!("  - Type: 0x7d (Deposit transaction - Bluebird)");
+            println!("  - Type: 0x7d (Facet deposit transaction)");
             println!("  - Length: {} bytes", dep.len());
             println!("  - Successfully encoded for L2 submission");
         }
