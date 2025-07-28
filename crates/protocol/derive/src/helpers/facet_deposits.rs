@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 use alloy_consensus::{Receipt, TxEnvelope, Eip658Value, Transaction};
 use alloy_primitives::{Address, B256, Bytes, Log};
 use alloy_eips::eip2718::Encodable2718;
