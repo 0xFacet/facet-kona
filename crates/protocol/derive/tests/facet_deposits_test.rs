@@ -32,11 +32,11 @@ fn test_derive_facet_deposits_from_calldata() {
     // Verify we got exactly one deposit
     assert_eq!(deposits.len(), 1);
     
-    // Verify it's a deposit transaction (type 0x7e)
+    // Verify it's a deposit transaction (type 0x7d)
     assert!(!deposits[0].is_empty());
-    assert_eq!(deposits[0][0], 0x7e);
+    assert_eq!(deposits[0][0], 0x7d);
     
-    // Verify the length is reasonable
+    // Verify the length is reasonable (89 bytes for new deposit type)
     assert_eq!(deposits[0].len(), 89);
 }
 
@@ -83,11 +83,11 @@ fn test_derive_facet_deposits_from_log() {
     // Verify we got exactly one deposit
     assert_eq!(deposits_log.len(), 1);
     
-    // Verify it's a deposit transaction (type 0x7e)
+    // Verify it's a deposit transaction (type 0x7d)
     assert!(!deposits_log[0].is_empty());
-    assert_eq!(deposits_log[0][0], 0x7e);
+    assert_eq!(deposits_log[0][0], 0x7d);
     
-    // Verify the length is reasonable
+    // Verify the length is reasonable (89 bytes for new deposit type)
     assert_eq!(deposits_log[0].len(), 89);
 }
 
@@ -259,15 +259,15 @@ fn test_facet_mint_calculation() {
     // Verify we got exactly one deposit
     assert_eq!(deposits.len(), 1);
     
-    // Verify it's a deposit transaction (type 0x7e)
+    // Verify it's a deposit transaction (type 0x7d)
     assert!(!deposits[0].is_empty());
-    assert_eq!(deposits[0][0], 0x7e);
+    assert_eq!(deposits[0][0], 0x7d);
     
     // Decode the deposit transaction to extract the mint amount
     use alloy_eips::eip2718::Decodable2718;
     use op_alloy_consensus::TxDeposit;
     
-    let deposit_data = &deposits[0][1..]; // Skip the 0x7e prefix
+    let deposit_data = &deposits[0][1..]; // Skip the 0x7d prefix
     let deposit_tx = TxDeposit::decode_2718(&mut &deposit_data[..]).expect("failed to decode deposit tx");
     
     // Verify the mint amount matches the expected value

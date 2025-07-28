@@ -138,7 +138,7 @@ fn facet_deposit_transaction_encoding() {
     let deposit_bytes = Bytes::from(out);
     
     // Verify the encoding
-    assert_eq!(deposit_bytes[0], DEPOSIT_TX_TYPE, "Should start with 0x7e");
+    assert_eq!(deposit_bytes[0], DEPOSIT_TX_TYPE, "Should start with 0x7d");
     assert!(!deposit_bytes.is_empty(), "Should not be empty");
     assert!(deposit_bytes.len() > 10, "Should have reasonable length");
     

@@ -42,7 +42,7 @@ fn test_facet_deposit_format_validation() {
     
     // Validate the deposit transaction format
     assert!(!deposit_tx_bytes.is_empty(), "Deposit transaction should not be empty");
-    assert_eq!(deposit_tx_bytes[0], 0x7e, "Should be a deposit transaction (type 0x7e)");
+    assert_eq!(deposit_tx_bytes[0], 0x7d, "Should be a deposit transaction (type 0x7d)");
     
     // Verify the transaction is the expected length
     assert_eq!(deposit_tx_bytes.len(), 89, "Deposit transaction should be 89 bytes");
@@ -103,7 +103,7 @@ fn test_facet_deposit_log_format_validation() {
     
     // Validate the deposit transaction format
     assert!(!deposit_tx_bytes.is_empty(), "Deposit transaction should not be empty");
-    assert_eq!(deposit_tx_bytes[0], 0x7e, "Should be a deposit transaction (type 0x7e)");
+    assert_eq!(deposit_tx_bytes[0], 0x7d, "Should be a deposit transaction (type 0x7d)");
     
     // Verify the transaction is the expected length
     assert_eq!(deposit_tx_bytes.len(), 89, "Deposit transaction should be 89 bytes");
@@ -151,7 +151,7 @@ fn test_facet_deposit_revm_compatibility() {
     
     // Should be a valid deposit transaction
     assert!(!deposit_tx.is_empty(), "Deposit transaction should not be empty");
-    assert_eq!(deposit_tx[0], 0x7e, "Should be deposit transaction type");
+    assert_eq!(deposit_tx[0], 0x7d, "Should be deposit transaction type");
     assert_eq!(deposit_tx.len(), 89, "Should be correct length");
     
     // 3. Test that we can create a valid payload structure

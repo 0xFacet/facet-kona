@@ -1,9 +1,10 @@
 //! Contains deposit transaction types and helper methods.
 
 use alloc::vec::Vec;
-use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Address, B256, Bytes, Log, TxKind, U64, U256, b256};
+use alloy_eips::eip2718::Encodable2718;
 use op_alloy_consensus::{TxDeposit, UserDepositSource};
+use crate::facet::DEPOSIT_TX_TYPE;
 
 /// Deposit log event abi signature.
 pub const DEPOSIT_EVENT_ABI: &str = "TransactionDeposited(address,address,uint256,bytes)";
@@ -178,8 +179,9 @@ pub fn decode_deposit(block_hash: B256, index: usize, log: &Log) -> Result<Bytes
 
     unmarshal_deposit_version0(&mut deposit_tx, to, opaque_data)?;
 
-    // Re-encode the deposit transaction
-    let mut buffer = Vec::with_capacity(deposit_tx.eip2718_encoded_length());
+    // Re-encode the deposit transaction with Bluebird type byte
+    let mut buffer = Vec::with_capacity(deposit_tx.eip2718_encoded_length() + 1);
+    buffer.push(DEPOSIT_TX_TYPE);
     deposit_tx.encode_2718(&mut buffer);
     Ok(Bytes::from(buffer))
 }
@@ -406,7 +408,7 @@ mod test {
         };
         let tx = decode_deposit(B256::default(), 0, &log).unwrap();
         let raw_hex = hex!(
-            "7ef887a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a14594ffffffffffffffffffffffffffffffffffffffff94bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb80808080b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "7df887a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a14594ffffffffffffffffffffffffffffffffffffffff94bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb80808080b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
         let expected = Bytes::from(raw_hex);
         assert_eq!(tx, expected);
@@ -450,7 +452,7 @@ mod test {
         };
         let tx = decode_deposit(B256::default(), 0, &log).unwrap();
         let raw_hex = hex!(
-            "7ef875a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a145941111111111111111111111111111111111111111800a648203e880b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "7df875a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a145941111111111111111111111111111111111111111800a648203e880b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
         let expected = Bytes::from(raw_hex);
         assert_eq!(tx, expected);

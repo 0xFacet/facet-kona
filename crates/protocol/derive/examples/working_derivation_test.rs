@@ -214,7 +214,7 @@ async fn main() -> Result<()> {
     
     // Check L1BlockInfoTx
     if let Some(first_tx) = kona_txs.first() {
-        if first_tx.get(0) == Some(&0x7e) {
+        if first_tx.get(0) == Some(&0x7d) {
             println!("\n✅ First transaction is L1BlockInfoTx (deposit)");
             if first_tx.len() > 190 && first_tx.len() < 200 {
                 println!("✅ Facet L1BlockInfoTx format detected ({} bytes)", first_tx.len());

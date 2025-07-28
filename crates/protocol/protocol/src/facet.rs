@@ -7,8 +7,8 @@ use alloc::format;
 
 /// Prefix byte identifying a Facet payload.
 pub const FACET_TX_TYPE: u8 = 0x46;
-/// Prefix byte for an Optimism deposit.
-pub const DEPOSIT_TX_TYPE: u8 = 0x7e;
+/// Prefix byte for an Optimism deposit (Bluebird version).
+pub const DEPOSIT_TX_TYPE: u8 = 0x7d;
 
 /// 0x1111000000000000000000000000000000001111 per OP Stack address aliasing rule.
 const ALIAS_OFFSET: U256 = U256::from_be_bytes([
