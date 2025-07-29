@@ -7,22 +7,27 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 /// Represents the fields within a Facet L1 block info transaction.
 ///
 /// Facet Binary Format (extends Ecotone)
-/// +---------+--------------------------+
-/// | Bytes   | Field                    |
-/// +---------+--------------------------+
-/// | 4       | Function signature       |
-/// | 4       | BaseFeeScalar            |
-/// | 4       | BlobBaseFeeScalar        |
-/// | 8       | SequenceNumber           |
-/// | 8       | Timestamp                |
-/// | 8       | L1BlockNumber            |
-/// | 32      | BaseFee                  |
-/// | 32      | BlobBaseFee              |
-/// | 32      | BlockHash                |
-/// | 32      | BatcherHash              |
-/// | 16      | FctMintPeriodL1DataGas   |
-/// | 16      | FctMintRate              |
-/// +---------+--------------------------+
+/// +---------+----------------------------------------------+
+/// | Bytes   | Field                                        |
+/// +---------+----------------------------------------------+
+/// | 4       | Function signature                           |
+/// | 4       | BaseFeeScalar                                |
+/// | 4       | BlobBaseFeeScalar                            |
+/// | 8       | SequenceNumber                               |
+/// | 8       | Timestamp                                    |
+/// | 8       | L1BlockNumber                                |
+/// | 32      | BaseFee                                      |
+/// | 32      | BlobBaseFee                                  |
+/// | 32      | BlockHash                                    |
+/// | 32      | BatcherHash                                  |
+/// | 16      | FctMintPeriodL1DataGas (deprecated)          |
+/// | 16      | FctMintRate                                  |
+/// | 16      | FctPeriodStartBlock                          |
+/// | 16      | FctTotalMinted                               |
+/// | 16      | FctMaxSupply                                 |
+/// | 16      | FctPeriodMinted                              |
+/// | 32      | FctInitialTargetPerPeriod                    |
+/// +---------+----------------------------------------------+
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Default, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct L1BlockInfoFacet {
@@ -58,9 +63,13 @@ pub struct L1BlockInfoFacet {
     /// Total FCT minted across all periods
     pub fct_total_minted: u128,
     /// Block number when current period started
-    pub fct_period_start_block: u64,
+    pub fct_period_start_block: u128,
     /// FCT minted in current period
     pub fct_period_minted: u128,
+    /// Maximum supply of FCT tokens
+    pub fct_max_supply: u128,
+    /// Initial target FCT to mint per period
+    pub fct_initial_target_per_period: u128,
 }
 
 impl L1BlockInfoFacet {
@@ -68,8 +77,8 @@ impl L1BlockInfoFacet {
     pub const L1_SCALAR: u8 = 1;
 
     /// The length of an L1 info transaction in Facet.
-    /// 4 (selector) + 32*5 (base fields) + 16 (fct_mint_rate) + 16 (fct_total_minted) + 8 (fct_period_start_block) + 16 (fct_period_minted)
-    pub const L1_INFO_TX_LEN: usize = 4 + 32 * 5 + 16 + 16 + 8 + 16;
+    /// 4 (selector) + 32*5 (base fields) + 32*4 (FCT words) = 292 bytes
+    pub const L1_INFO_TX_LEN: usize = 292;
 
     /// The 4 byte selector of "setL1BlockValuesEcotone()"
     pub const L1_INFO_TX_SELECTOR: [u8; 4] = [0x44, 0x0a, 0x5e, 0x20];
@@ -78,20 +87,38 @@ impl L1BlockInfoFacet {
     pub fn encode_calldata(&self) -> Bytes {
         let mut buf = Vec::with_capacity(Self::L1_INFO_TX_LEN);
         buf.extend_from_slice(Self::L1_INFO_TX_SELECTOR.as_ref());
-        buf.extend_from_slice(self.base_fee_scalar.to_be_bytes().as_ref());
-        buf.extend_from_slice(self.blob_base_fee_scalar.to_be_bytes().as_ref());
-        buf.extend_from_slice(self.sequence_number.to_be_bytes().as_ref());
-        buf.extend_from_slice(self.time.to_be_bytes().as_ref());
-        buf.extend_from_slice(self.number.to_be_bytes().as_ref());
+        // First 36 bytes: scalars and numbers
+        buf.extend_from_slice(self.base_fee_scalar.to_be_bytes().as_ref()); // 4 bytes
+        buf.extend_from_slice(self.blob_base_fee_scalar.to_be_bytes().as_ref()); // 4 bytes
+        buf.extend_from_slice(self.sequence_number.to_be_bytes().as_ref()); // 8 bytes
+        buf.extend_from_slice(self.time.to_be_bytes().as_ref()); // 8 bytes
+        buf.extend_from_slice(self.number.to_be_bytes().as_ref()); // 8 bytes
         buf.extend_from_slice(U256::from(self.base_fee).to_be_bytes::<32>().as_ref());
         buf.extend_from_slice(U256::from(self.blob_base_fee).to_be_bytes::<32>().as_ref());
         buf.extend_from_slice(self.block_hash.as_ref());
         buf.extend_from_slice(self.batcher_address.into_word().as_ref());
-        // Facet-specific fields
+        
+        
+        // At this point we are at offset 164 (including selector)
+        // Ruby offsets exclude the selector, so Ruby offset 160 = our offset 164
+        
+        // Word 1 (offset 164): [fct_mint_period_l1_data_gas | fct_mint_rate]
+        // Note: fct_mint_period_l1_data_gas is deprecated and always 0 after fork
+        buf.extend_from_slice(0u128.to_be_bytes().as_ref()); // fct_mint_period_l1_data_gas
         buf.extend_from_slice(self.fct_mint_rate.to_be_bytes().as_ref());
-        buf.extend_from_slice(self.fct_total_minted.to_be_bytes().as_ref());
+        
+        // Word 2 (offset 196): [fct_period_start_block | fct_total_minted]
+        // Note: fct_period_start_block is promoted to 128-bit
         buf.extend_from_slice(self.fct_period_start_block.to_be_bytes().as_ref());
+        buf.extend_from_slice(self.fct_total_minted.to_be_bytes().as_ref());
+        
+        // Word 3 (offset 228): [fct_max_supply | fct_period_minted]
+        buf.extend_from_slice(self.fct_max_supply.to_be_bytes().as_ref());
         buf.extend_from_slice(self.fct_period_minted.to_be_bytes().as_ref());
+        
+        // Word 4 (offset 260): fct_initial_target_per_period padded to 32 bytes
+        buf.extend_from_slice(U256::from(self.fct_initial_target_per_period).to_be_bytes::<32>().as_ref());
+        
         // Notice: do not include the `empty_scalars` field in the calldata.
         // Notice: do not include the `l1_fee_overhead` field in the calldata.
         buf.into()
@@ -103,8 +130,12 @@ impl L1BlockInfoFacet {
             return Err(DecodeError::InvalidEcotoneLength(Self::L1_INFO_TX_LEN, r.len()));
         }
 
-        // SAFETY: For all below slice operations, the full
-        //         length is validated above to be `196`.
+        // Helper function to decode u128 from big-endian bytes
+        fn decode_u128_be(data: &[u8], start: usize) -> u128 {
+            let mut bytes = [0u8; 16];
+            bytes.copy_from_slice(&data[start..start + 16]);
+            u128::from_be_bytes(bytes)
+        }
 
         // SAFETY: 4 bytes are copied directly into the array
         let mut base_fee_scalar = [0u8; 4];
@@ -142,28 +173,27 @@ impl L1BlockInfoFacet {
         let blob_base_fee = u128::from_be_bytes(blob_base_fee);
 
         let block_hash = B256::from_slice(r[100..132].as_ref());
+        // Batcher address is padded to 32 bytes, with the address in the last 20 bytes
         let batcher_address = Address::from_slice(r[144..164].as_ref());
 
-        // Facet-specific fields
-        // SAFETY: 16 bytes are copied directly into the array
-        let mut fct_mint_rate = [0u8; 16];
-        fct_mint_rate.copy_from_slice(&r[164..180]);
-        let fct_mint_rate = u128::from_be_bytes(fct_mint_rate);
-
-        // SAFETY: 16 bytes are copied directly into the array
-        let mut fct_total_minted = [0u8; 16];
-        fct_total_minted.copy_from_slice(&r[180..196]);
-        let fct_total_minted = u128::from_be_bytes(fct_total_minted);
+        // Ruby offsets are from start of data (excluding selector)
+        // Our offsets include the selector, so add 4 to each Ruby offset
         
-        // SAFETY: 8 bytes are copied directly into the array
-        let mut fct_period_start_block = [0u8; 8];
-        fct_period_start_block.copy_from_slice(&r[196..204]);
-        let fct_period_start_block = u64::from_be_bytes(fct_period_start_block);
+        // Word 1 starts at offset 164 (Ruby 160 + 4)
+        // Skip fct_mint_period_l1_data_gas at 164-180 (deprecated, always 0)
+        let fct_mint_rate = decode_u128_be(r, 180); // 180-196
         
-        // SAFETY: 16 bytes are copied directly into the array
-        let mut fct_period_minted = [0u8; 16];
-        fct_period_minted.copy_from_slice(&r[204..220]);
-        let fct_period_minted = u128::from_be_bytes(fct_period_minted);
+        // Word 2 starts at offset 196 (Ruby 192 + 4)
+        let fct_period_start_block = decode_u128_be(r, 196); // Full 128-bit value
+        let fct_total_minted = decode_u128_be(r, 212);
+        
+        // Word 3 starts at offset 228 (Ruby 224 + 4)
+        let fct_max_supply = decode_u128_be(r, 228);
+        let fct_period_minted = decode_u128_be(r, 244);
+        
+        // Word 4 starts at offset 260 (Ruby 256 + 4)
+        // fct_initial_target_per_period is in the lower 128 bits
+        let fct_initial_target_per_period = decode_u128_be(r, 276);
 
         Ok(Self {
             number,
@@ -185,6 +215,8 @@ impl L1BlockInfoFacet {
             fct_total_minted,
             fct_period_start_block,
             fct_period_minted,
+            fct_max_supply,
+            fct_initial_target_per_period,
         })
     }
 }
@@ -219,12 +251,34 @@ mod tests {
             l1_fee_overhead: U256::ZERO,
             fct_mint_rate: 1000,
             fct_total_minted: 2000,
-            fct_period_start_block: 0,
+            fct_period_start_block: 100,
             fct_period_minted: 500,
+            fct_max_supply: 622_222_222,
+            fct_initial_target_per_period: 29_595,
         };
 
         let calldata = info.encode_calldata();
+        assert_eq!(calldata.len(), L1BlockInfoFacet::L1_INFO_TX_LEN);
+        
+        
         let decoded_info = L1BlockInfoFacet::decode_calldata(&calldata).unwrap();
         assert_eq!(info, decoded_info);
+    }
+    
+    #[test]
+    fn test_encoding_offsets() {
+        // Test to verify the exact offsets of encoded fields
+        let mut expected = vec![0u8; 292];
+        
+        // Selector
+        expected[0..4].copy_from_slice(&L1BlockInfoFacet::L1_INFO_TX_SELECTOR);
+        
+        // Put a unique value for fct_mint_rate at the correct offset
+        let test_rate = 0x1234567890abcdef_u128;
+        expected[180..196].copy_from_slice(&test_rate.to_be_bytes()); // Updated offset
+        
+        // Now decode and check
+        let decoded = L1BlockInfoFacet::decode_calldata(&expected).unwrap();
+        assert_eq!(decoded.fct_mint_rate, test_rate);
     }
 }

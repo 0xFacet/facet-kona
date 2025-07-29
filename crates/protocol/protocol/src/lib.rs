@@ -73,9 +73,7 @@ pub mod test_utils;
 mod consts;
 mod facet;
 mod fct_mint;
-mod fct_params;
 
 pub use consts::{FACET_INBOX_ADDRESS, FACET_LOG_INBOX_EVENT_SIG};
 pub use facet::{decode_facet_payload, alias_l1_to_l2, FacetPayload, DecodeError as FacetDecodeError, FACET_TX_TYPE, DEPOSIT_TX_TYPE};
 pub use fct_mint::FctMintCalculator;
-pub use fct_params::{FctParams};

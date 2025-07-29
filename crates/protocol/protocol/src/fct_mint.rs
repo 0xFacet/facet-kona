@@ -9,7 +9,7 @@
 #[allow(unused_extern_crates)]
 extern crate alloc;
 
-use crate::{FctParams, L1BlockInfoFacet};
+use crate::L1BlockInfoFacet;
 #[allow(unused_imports)]
 use alloy_primitives::U256;
 use num_bigint::BigInt;
@@ -255,9 +255,10 @@ impl FctMintCalculator {
         block_number: u64,
         l1_base_fee: u64,
         prev_l1_info: &L1BlockInfoFacet,
-    ) -> (u128, u128, u64, u128) {
-        // Get FCT params from global state
-        let params = FctParams::get().expect("FctParams not initialized");
+    ) -> (u128, u128, u128, u128) {
+        // Get FCT parameters from L1 block info
+        let max_supply = prev_l1_info.fct_max_supply;
+        let target_per_period = prev_l1_info.fct_initial_target_per_period;
         
         // Load period state from previous block
         let mut period = MintPeriod {
@@ -265,9 +266,9 @@ impl FctMintCalculator {
             fct_mint_rate: BigRational::from_u128(prev_l1_info.fct_mint_rate).unwrap(),
             total_minted: BigRational::from_u128(prev_l1_info.fct_total_minted).unwrap(),
             period_minted: BigRational::from_u128(prev_l1_info.fct_period_minted).unwrap(),
-            period_start_block: prev_l1_info.fct_period_start_block,
-            max_supply: params.max_supply,
-            target_per_period: params.target_per_period,
+            period_start_block: prev_l1_info.fct_period_start_block as u64,
+            max_supply,
+            target_per_period,
         };
         
         // Use assign_mint_amounts which handles period rolling internally
@@ -277,7 +278,7 @@ impl FctMintCalculator {
         (
             rational_to_u128_sat(&period.fct_mint_rate),
             rational_to_u128_sat(&period.total_minted),
-            period.period_start_block,
+            period.period_start_block as u128,
             rational_to_u128_sat(&period.period_minted),
         )
     }
@@ -311,13 +312,11 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // This test modifies global state, run with --ignored
     fn test_genesis_period() {
         // Initialize FCT params
         let one_eth = 1_000_000_000_000_000_000u128;
         let max_supply = 21_000_000u128 * one_eth;
         let target_per_period = 20_000u128 * one_eth;
-        FctParams::force_init(max_supply, target_per_period);
         
         // Create genesis block state
         let prev_l1_info = L1BlockInfoFacet {
@@ -325,6 +324,8 @@ mod tests {
             fct_total_minted: 0,
             fct_period_start_block: 0,
             fct_period_minted: 0,
+            fct_max_supply: max_supply,
+            fct_initial_target_per_period: target_per_period,
             ..Default::default()
         };
         
@@ -431,13 +432,10 @@ mod tests {
     }
     
     #[test]
-    #[ignore] // This test modifies global state, run with --ignored
     fn test_period_target_consumption() {
-        // Initialize FCT params
         let one_eth = 1_000_000_000_000_000_000u128;
         let max_supply = 21_000_000u128 * one_eth;
         let target_per_period = 20_000u128 * one_eth;
-        FctParams::force_init(max_supply, target_per_period);
         
         // Create state where period consumed half the target
         let half_target = target_per_period / 2;
@@ -446,6 +444,8 @@ mod tests {
             fct_total_minted: half_target, // Total minted includes this period
             fct_period_start_block: 0,
             fct_period_minted: half_target, // Only minted half the target this period
+            fct_max_supply: max_supply,
+            fct_initial_target_per_period: target_per_period,
             ..Default::default()
         };
         
@@ -459,28 +459,21 @@ mod tests {
             &prev_l1_info,
         );
         
-        // Check what params are being used
-        let params = FctParams::get().unwrap();
-        assert_eq!(params.target_per_period, target_per_period, "Target per period mismatch");
-        
         // Check total minted
         assert_eq!(total, half_target, "Total minted should not change with empty tx");
         
         // Rate should double (minted only half target, so need to catch up)
         // Adjustment factor = target/minted = 20k/10k = 2
         assert_eq!(rate, 2_000_000_000_000_000u128); // 2x the original rate
-        assert_eq!(start, 500); // New period started
+        assert_eq!(start, 500u128); // New period started
         assert_eq!(period, 0); // Period minted reset
     }
 
     #[test]
-    #[ignore] // This test modifies global state, run with --ignored  
     fn test_supply_cap() {
-        // Initialize FCT params
         let one_eth = 1_000_000_000_000_000_000u128;
         let max_supply = 100u128 * one_eth; // Small max supply for testing
         let target_per_period = 50u128 * one_eth;
-        FctParams::force_init(max_supply, target_per_period);
         
         // Create state near max supply
         let prev_l1_info = L1BlockInfoFacet {
@@ -488,6 +481,8 @@ mod tests {
             fct_total_minted: 99 * 1_000_000_000_000_000_000, // 99 ETH of 100 ETH max
             fct_period_start_block: 0,
             fct_period_minted: 0,
+            fct_max_supply: max_supply,
+            fct_initial_target_per_period: target_per_period,
             ..Default::default()
         };
         
@@ -531,26 +526,28 @@ mod tests {
     }
     
     /// Helper to initialize FCT parameters for testing
-    fn init_test_params() {
-        let max_supply = 622_222_222u128;
-        let initial_target = 29_595u128;
-        FctParams::force_init(max_supply, initial_target);
+    fn create_test_l1_info() -> L1BlockInfoFacet {
+        L1BlockInfoFacet {
+            fct_max_supply: 622_222_222u128,
+            fct_initial_target_per_period: 29_595u128,
+            fct_mint_rate: 2, // Default starting rate
+            fct_total_minted: 0,
+            fct_period_start_block: 0,
+            fct_period_minted: 0,
+            ..Default::default()
+        }
     }
     
     // ==================== Post-fork minting logic tests ====================
     
     #[test]
     fn test_mints_within_current_period_without_closing() {
-        init_test_params();
-        
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1000,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 995,
-            fct_period_minted: 100,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1000;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 995;
+        prev_l1_info.fct_period_minted = 100;
         
         let mut txs = vec![build_tx(100)];
         let base_fee = 10u64;
@@ -568,22 +565,18 @@ mod tests {
         assert_eq!(total, 140_002_000);
         assert_eq!(period_minted, 2_100);
         assert_eq!(rate, 2);
-        assert_eq!(start_block, 995); // Period didn't roll
+        assert_eq!(start_block, 995u128); // Period didn't roll
     }
     
     #[test]
     fn test_closes_period_when_mint_cap_hit_and_starts_new() {
-        init_test_params();
-        
         let target_per_period = 29_595u128;
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1000,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 995,
-            fct_period_minted: target_per_period - 341, // 341 short of cap
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1000;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 995;
+        prev_l1_info.fct_period_minted = target_per_period - 341; // 341 short of cap
         
         let mut txs = vec![build_tx(200)]; // burns 2000 wei ETH
         let base_fee = 10u64;
@@ -599,27 +592,23 @@ mod tests {
         // The exact mint amount depends on rate adjustment
         assert!(txs[0].mint > 341);
         assert_eq!(total, 140_000_000 + txs[0].mint);
-        assert_eq!(start_block, 1010); // New period started
+        assert_eq!(start_block, 1010u128); // New period started
         assert!(period_minted < target_per_period); // New period not full
         assert!(rate <= 2); // Rate adjusted down
     }
     
     #[test]
     fn test_adjusts_rate_up_when_period_ends_by_block_count() {
-        init_test_params();
-        
         let adj_period_len = 500u64;
         let target_per_period = 29_595u128;
         let block_num = 1000 + adj_period_len;
         
-        let prev_l1_info = L1BlockInfoFacet {
-            number: block_num - 1,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1000,
-            fct_period_minted: target_per_period / 2, // Way under target
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = block_num - 1;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1000;
+        prev_l1_info.fct_period_minted = target_per_period / 2; // Way under target
         
         let mut txs = vec![build_tx(10)];
         let base_fee = 10u64;
@@ -633,22 +622,18 @@ mod tests {
         
         // Rate should increase (doubled since actual = target/2)
         assert_eq!(rate, 4); // 2 * 2
-        assert_eq!(start_block, block_num); // New period
+        assert_eq!(start_block, block_num as u128); // New period
         assert_eq!(period_minted, txs[0].mint); // Only this tx in new period
     }
     
     #[test]
     fn test_handles_multi_period_spillover() {
-        init_test_params();
-        
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1019,
-            fct_mint_rate: 1,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 970,
-            fct_period_minted: 0,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1019;
+        prev_l1_info.fct_mint_rate = 1;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 970;
+        prev_l1_info.fct_period_minted = 0;
         
         let mut txs = vec![build_tx(500_000)]; // Large burn
         let base_fee = 1u64;
@@ -664,18 +649,14 @@ mod tests {
         let target_per_period = 29_595u128;
         assert!(txs[0].mint > target_per_period);
         assert_eq!(total, 140_000_000 + txs[0].mint);
-        assert_eq!(start_block, 1020); // New period at current block
+        assert_eq!(start_block, 1020u128); // New period at current block
         assert!(rate >= 1); // Rate adjusted based on consumption
     }
     
     #[test]
     fn test_lowers_target_after_crossing_halving_threshold() {
-        // Initialize with larger max supply for this test
-        if !FctParams::is_initialized() {
-            let max_supply = 622_222_222u128;
-            let initial_target = 29_595u128;
-            FctParams::init(max_supply, initial_target);
-        }
+        let max_supply = 622_222_222u128;
+        let initial_target = 29_595u128;
         
         // Just before first halving (50% of 622M = 311M)
         let prev_l1_info = L1BlockInfoFacet {
@@ -684,6 +665,8 @@ mod tests {
             fct_total_minted: 310_000_000,
             fct_period_start_block: 1020,
             fct_period_minted: 0,
+            fct_max_supply: max_supply,
+            fct_initial_target_per_period: initial_target,
             ..Default::default()
         };
         
@@ -737,17 +720,13 @@ mod tests {
     
     #[test]
     fn test_starts_new_period_when_cap_met_exactly() {
-        init_test_params();
-        
         let target_per_period = 29_595u128;
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1059,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_000_000 + target_per_period,
-            fct_period_start_block: 1059,
-            fct_period_minted: target_per_period, // Exactly at cap
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1059;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_000_000 + target_per_period;
+        prev_l1_info.fct_period_start_block = 1059;
+        prev_l1_info.fct_period_minted = target_per_period; // Exactly at cap
         
         let mut txs = vec![build_tx(100)];
         let base_fee = 10u64;
@@ -761,26 +740,22 @@ mod tests {
         
         // Period should have rolled
         assert!(txs[0].mint > 0);
-        assert_eq!(start_block, 1060); // New period
+        assert_eq!(start_block, 1060u128); // New period
         assert_eq!(period_minted, txs[0].mint); // Only this tx
     }
     
     #[test]
     fn test_proportional_down_adjustment_when_period_ends_mid_block() {
-        init_test_params();
-        
         let adj_period_len = 500u64;
         let blocks_elapsed = (adj_period_len as f64 * 0.8) as u64; // 80% of period
         let target_per_period = 29_595u128;
         
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 999 + blocks_elapsed,
-            fct_mint_rate: 10,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1000,
-            fct_period_minted: target_per_period - 101, // 101 short
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 999 + blocks_elapsed;
+        prev_l1_info.fct_mint_rate = 10;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1000;
+        prev_l1_info.fct_period_minted = target_per_period - 101; // 101 short
         
         let mut txs = vec![build_tx(101)]; // Exactly fills cap
         let base_fee = 1u64;
@@ -799,20 +774,16 @@ mod tests {
     
     #[test]
     fn test_correctly_calculates_fct_based_on_eth_burned() {
-        init_test_params();
-        
         let mint_rate = 5u128;
         let base_fee = 20u64;
         let gas_used = 1_000u64;
         
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1049,
-            fct_mint_rate: mint_rate,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1040,
-            fct_period_minted: 1_000,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1049;
+        prev_l1_info.fct_mint_rate = mint_rate;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1040;
+        prev_l1_info.fct_period_minted = 1_000;
         
         let mut txs = vec![build_tx(gas_used)];
         
@@ -835,17 +806,13 @@ mod tests {
     
     #[test]
     fn test_handles_zero_minting_in_period_for_rate_adjustment() {
-        init_test_params();
-        
         let adj_period_len = 500u64;
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 999 + adj_period_len,
-            fct_mint_rate: 3,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1000,
-            fct_period_minted: 0, // No minting in period
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 999 + adj_period_len;
+        prev_l1_info.fct_mint_rate = 3;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1000;
+        prev_l1_info.fct_period_minted = 0; // No minting in period
         
         let mut txs = vec![build_tx(10)];
         let base_fee = 1u64;
@@ -863,19 +830,15 @@ mod tests {
     
     #[test]
     fn test_opens_fresh_period_when_adjustment_period_elapsed() {
-        init_test_params();
-        
         let adj_period_len = 500u64;
         let block_num = 1000 + adj_period_len + 3; // > 1 full period
         
-        let prev_l1_info = L1BlockInfoFacet {
-            number: block_num - 1,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_050_000,
-            fct_period_start_block: 1000,
-            fct_period_minted: 50_000,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = block_num - 1;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_050_000;
+        prev_l1_info.fct_period_start_block = 1000;
+        prev_l1_info.fct_period_minted = 50_000;
         
         let mut txs = vec![build_tx(50)];
         let base_fee = 10u64;
@@ -888,7 +851,7 @@ mod tests {
         );
         
         // New period should start at current block
-        assert_eq!(start_block, block_num);
+        assert_eq!(start_block, block_num as u128);
         assert_eq!(period_minted, txs[0].mint);
     }
     
@@ -896,8 +859,6 @@ mod tests {
     
     #[test]
     fn test_halving_thresholds() {
-        init_test_params();
-        
         let target_per_period = 29_595u128;
         
         // Test different total minted amounts
@@ -910,8 +871,6 @@ mod tests {
             max_supply: 622_222_222u128,
             target_per_period: 29_595u128,
         };
-        
-        let _params = FctParams::get().unwrap();
         assert_eq!(period.get_current_halving_level(), 0);
         assert_eq!(period.current_target().to_integer().to_u128().unwrap(), target_per_period);
         
@@ -930,16 +889,12 @@ mod tests {
     
     #[test]
     fn test_handles_extremely_large_burns() {
-        init_test_params();
-        
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1099,
-            fct_mint_rate: 1,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1090,
-            fct_period_minted: 0,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1099;
+        prev_l1_info.fct_mint_rate = 1;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1090;
+        prev_l1_info.fct_period_minted = 0;
         
         let mut txs = vec![build_tx(1_000_000)]; // Huge burn
         let base_fee = 1u64;
@@ -954,22 +909,18 @@ mod tests {
         // Should handle gracefully
         assert!(txs[0].mint > 0);
         assert!(total > 140_000_000);
-        assert_eq!(start_block, 1100);
+        assert_eq!(start_block, 1100u128);
     }
     
     #[test]
     fn test_respects_min_rate_limit() {
-        init_test_params();
-        
         let target_per_period = 29_595u128;
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1109,
-            fct_mint_rate: 2,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1100,
-            fct_period_minted: target_per_period, // Hit target in 10 blocks
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1109;
+        prev_l1_info.fct_mint_rate = 2;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1100;
+        prev_l1_info.fct_period_minted = target_per_period; // Hit target in 10 blocks
         
         let mut txs = vec![build_tx(100)];
         let base_fee = 1u64;
@@ -987,16 +938,12 @@ mod tests {
     
     #[test]
     fn test_handles_zero_base_fee() {
-        init_test_params();
-        
-        let prev_l1_info = L1BlockInfoFacet {
-            number: 1099,
-            fct_mint_rate: 5,
-            fct_total_minted: 140_000_000,
-            fct_period_start_block: 1090,
-            fct_period_minted: 1000,
-            ..Default::default()
-        };
+        let mut prev_l1_info = create_test_l1_info();
+        prev_l1_info.number = 1099;
+        prev_l1_info.fct_mint_rate = 5;
+        prev_l1_info.fct_total_minted = 140_000_000;
+        prev_l1_info.fct_period_start_block = 1090;
+        prev_l1_info.fct_period_minted = 1000;
         
         let mut txs = vec![build_tx(1000)];
         let base_fee = 0u64; // Zero base fee
@@ -1017,7 +964,6 @@ mod tests {
         // Initialize with specific max supply
         let max_supply = 622_222_222u128;
         let initial_target = 29_595u128;
-        FctParams::init(max_supply, initial_target);
         
         // Set up to land exactly on first halving threshold
         let prev_l1_info = L1BlockInfoFacet {
@@ -1026,6 +972,8 @@ mod tests {
             fct_total_minted: 311_111_110, // 2 FCT short
             fct_period_start_block: 1090,
             fct_period_minted: 0,
+            fct_max_supply: max_supply,
+            fct_initial_target_per_period: initial_target,
             ..Default::default()
         };
         
@@ -1047,7 +995,7 @@ mod tests {
     
     #[test]
     fn test_compute_and_cap_rate() {
-        init_test_params();
+        // This test doesn't need L1BlockInfoFacet since it tests internal calculations
         
         let period = MintPeriod {
             block_num: 1000,

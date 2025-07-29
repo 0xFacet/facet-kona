@@ -140,6 +140,8 @@ impl L1BlockInfoTx {
             fct_total_minted: 0,
             fct_period_start_block: 0,
             fct_period_minted: 0,
+            fct_max_supply: 0, // Will be set by caller
+            fct_initial_target_per_period: 0, // Will be set by caller
         }))
     }
 
@@ -331,7 +333,7 @@ impl L1BlockInfoTx {
     /// Sets the FCT mint values for Facet variants.
     /// This is used by the StatefulAttributesBuilder to update the L1 block info
     /// with calculated FCT values after facet deposit processing.
-    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_total_minted: u128, fct_period_start_block: u64, fct_period_minted: u128) {
+    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_total_minted: u128, fct_period_start_block: u128, fct_period_minted: u128) {
         if let Self::Facet(facet) = self {
             facet.fct_mint_rate = fct_mint_rate;
             facet.fct_total_minted = fct_total_minted;
