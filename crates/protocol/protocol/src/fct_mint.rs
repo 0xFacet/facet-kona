@@ -43,7 +43,7 @@ pub(crate) struct MintPeriod {
     /// FCT minted in current period
     pub period_minted: BigRational,
     /// Block number when current period started
-    pub period_start_block: u64,
+    pub period_start_block: u128,
     /// Maximum FCT supply
     pub max_supply: u128,
     /// Target mint per period (before halving adjustments)
@@ -147,7 +147,7 @@ impl MintPeriod {
     }
 
     pub(crate) fn blocks_elapsed_in_period(&self) -> u64 {
-        self.block_num - self.period_start_block
+        (self.block_num as u128).saturating_sub(self.period_start_block) as u64
     }
 
     pub(crate) fn start_new_period(&mut self, adjustment_type: AdjustmentType) {
@@ -156,7 +156,7 @@ impl MintPeriod {
             AdjustmentType::AdjustUp => self.up_adjust_rate(),
         }
         
-        self.period_start_block = self.block_num;
+        self.period_start_block = self.block_num as u128;
         self.period_minted = BigRational::zero();
     }
 
@@ -266,7 +266,7 @@ impl FctMintCalculator {
             fct_mint_rate: BigRational::from_u128(prev_l1_info.fct_mint_rate).unwrap(),
             total_minted: BigRational::from_u128(prev_l1_info.fct_total_minted).unwrap(),
             period_minted: BigRational::from_u128(prev_l1_info.fct_period_minted).unwrap(),
-            period_start_block: prev_l1_info.fct_period_start_block as u64,
+            period_start_block: prev_l1_info.fct_period_start_block,
             max_supply,
             target_per_period,
         };
@@ -278,7 +278,7 @@ impl FctMintCalculator {
         (
             rational_to_u128_sat(&period.fct_mint_rate),
             rational_to_u128_sat(&period.total_minted),
-            period.period_start_block as u128,
+            period.period_start_block,
             rational_to_u128_sat(&period.period_minted),
         )
     }

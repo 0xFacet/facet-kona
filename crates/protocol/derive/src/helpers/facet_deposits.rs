@@ -31,7 +31,7 @@ pub fn derive_facet_deposits(
     l2_block_number: u64,
     l1_base_fee: u64,
     prev_l1_info: &kona_protocol::L1BlockInfoFacet,
-) -> Result<(Vec<Bytes>, u128, u128, u64, u128), PipelineEncodingError> {
+) -> Result<(Vec<Bytes>, u128, u128, u128, u128), PipelineEncodingError> {
     debug_assert_eq!(txs.len(), receipts.len(), "txs/receipts length mismatch");
     
     tracing::info!(

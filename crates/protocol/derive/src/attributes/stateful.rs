@@ -19,6 +19,13 @@ use kona_protocol::{
 };
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
 use crate::derive_facet_deposits;
+use op_alloy_consensus::{DepositSourceDomain, L1InfoDepositSource, TxDeposit};
+use alloy_primitives::{TxKind, U256, address};
+use kona_protocol::Predeploys;
+
+// Define constants used for building the deposit transaction
+const L1_INFO_DEPOSITOR_ADDRESS: Address = address!("deaddeaddeaddeaddeaddeaddeaddeaddead0001");
+const REGOLITH_SYSTEM_TX_GAS: u64 = 1_000_000;
 
 /// A stateful implementation of the [AttributesBuilder].
 #[derive(Debug, Default)]
@@ -77,7 +84,7 @@ where
         // Initialize FCT values - will be updated if processing facet deposits
         let new_fct_mint_rate: u128;
         let new_fct_total_minted: u128;
-        let new_fct_period_start_block: u64;
+        let new_fct_period_start_block: u128;
         let new_fct_period_minted: u128;
         
         // Read parent L1 info from parent block (needed for both new and continuing epochs)
@@ -170,6 +177,8 @@ where
                 fct_total_minted: 0,
                 fct_period_start_block: 0,
                 fct_period_minted: 0,
+                fct_max_supply: 0,
+                fct_initial_target_per_period: 0,
             });
             
             let (deposits, rate, total_minted, period_start_block, period_minted) = derive_facet_deposits(
@@ -279,7 +288,8 @@ where
         }
 
         // Build and encode the L1 info transaction for the current payload.
-        let (mut l1_info_tx, l1_info_tx_envelope) = L1BlockInfoTx::try_new_with_deposit_tx(
+        // First create the L1 info object.
+        let mut l1_info_tx = L1BlockInfoTx::try_new(
             &self.rollup_cfg,
             &sys_config,
             sequence_number,
@@ -289,12 +299,40 @@ where
         .map_err(|e| {
             PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit()
         })?;
-        
-        // Set the FCT values on the L1 info transaction
-        l1_info_tx.set_fct_values(new_fct_mint_rate, new_fct_total_minted, new_fct_period_start_block, new_fct_period_minted);
-        
-        let mut encoded_l1_info_tx = Vec::with_capacity(l1_info_tx_envelope.length());
-        l1_info_tx_envelope.encode_2718(&mut encoded_l1_info_tx);
+
+        // Update the Facet-specific FCT values before encoding.
+        l1_info_tx.set_fct_values(
+            new_fct_mint_rate,
+            new_fct_total_minted,
+            new_fct_period_start_block,
+            new_fct_period_minted,
+        );
+
+        // Build the deposit transaction envelope from the updated info.
+        let source = DepositSourceDomain::L1Info(L1InfoDepositSource {
+            l1_block_hash: l1_info_tx.block_hash(),
+            seq_number: sequence_number,
+        });
+
+        let mut deposit_tx = TxDeposit {
+            source_hash: source.source_hash(),
+            from: L1_INFO_DEPOSITOR_ADDRESS,
+            to: TxKind::Call(Predeploys::L1_BLOCK_INFO),
+            mint: None,
+            value: U256::ZERO,
+            gas_limit: 150_000_000,
+            is_system_transaction: true,
+            input: l1_info_tx.encode_calldata(),
+        };
+
+        if self.rollup_cfg.is_regolith_active(next_l2_time) {
+            deposit_tx.is_system_transaction = false;
+            deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
+        }
+
+        let mut encoded_l1_info_tx =
+            Vec::with_capacity(deposit_tx.eip2718_encoded_length());
+        deposit_tx.encode_2718(&mut encoded_l1_info_tx);
 
         let mut txs =
             Vec::with_capacity(1 + deposit_transactions.len() + upgrade_transactions.len());
