@@ -344,7 +344,9 @@ where
             input: l1_info_tx.encode_calldata(),
         };
 
-        let encoded_l1_info_tx = kona_protocol::encode_deposit_with_bluebird_type(&deposit_tx);
+        // Use standard encoding from op-alloy (which now uses 0x7d)
+        use alloy_eips::eip2718::Encodable2718;
+        let encoded_l1_info_tx = deposit_tx.encoded_2718();
 
         let mut txs =
             Vec::with_capacity(1 + deposit_transactions.len() + upgrade_transactions.len());
@@ -410,10 +412,10 @@ mod tests {
         test_utils::{TestChainProvider, TestSystemConfigL2Fetcher},
     };
     use alloc::vec;
-    use alloy_consensus::Header;
+    use alloy_consensus::{Header, Receipt, Eip658Value};
     use alloy_primitives::{B256, Log, LogData, U64, U256, address};
     use kona_genesis::{HardForkConfig, SystemConfig};
-    use kona_protocol::{BlockInfo, DepositError};
+    use kona_protocol::{BlockInfo, DepositError, DEPOSIT_EVENT_ABI_HASH};
 
     fn generate_valid_log() -> Log {
         let deposit_contract = address!("1111111111111111111111111111111111111111");

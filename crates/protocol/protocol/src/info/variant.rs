@@ -9,7 +9,7 @@ use op_alloy_consensus::{DepositSourceDomain, L1InfoDepositSource, TxDeposit};
 
 use crate::{
     BlockInfoError, DecodeError, L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus,
-    info::L1BlockInfoFacet, Predeploys, deposits::seal_deposit_with_hash,
+    info::L1BlockInfoFacet, Predeploys,
 };
 
 /// The system transaction gas limit post-Regolith
@@ -180,7 +180,9 @@ impl L1BlockInfoTx {
             deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
         }
 
-        Ok((l1_info, seal_deposit_with_hash(deposit_tx)))
+        // Use standard sealing - op-alloy now correctly handles hash computation with mint=None
+        use alloy_primitives::Sealable;
+        Ok((l1_info, deposit_tx.seal_slow()))
     }
 
     /// Decodes the [L1BlockInfoEcotone] object from Ethereum transaction calldata.

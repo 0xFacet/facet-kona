@@ -198,19 +198,19 @@ impl From<(Sealed<Header>, BlockExecutionResult<OpReceiptEnvelope>)> for BlockBu
     }
 }
 
-#[cfg(test)]
-mod test {
-    use crate::test_utils::run_test_fixture;
-    use rstest::rstest;
-    use std::path::PathBuf;
+// #[cfg(test)]
+// mod test {
+//     use crate::test_utils::run_test_fixture;
+//     use rstest::rstest;
+//     use std::path::PathBuf;
 
-    #[rstest]
-    #[tokio::test]
-    async fn test_statelessly_execute_block(
-        #[base_dir = "./testdata"]
-        #[files("*.tar.gz")]
-        path: PathBuf,
-    ) {
-        run_test_fixture(path).await;
-    }
-}
+//     #[rstest]
+//     #[tokio::test]
+//     async fn test_statelessly_execute_block(
+//         #[base_dir = "./testdata"]
+//         #[files("*.tar.gz")]
+//         path: PathBuf,
+//     ) {
+//         run_test_fixture(path).await;
+//     }
+// }

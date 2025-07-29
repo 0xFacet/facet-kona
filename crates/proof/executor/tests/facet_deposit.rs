@@ -41,7 +41,26 @@ fn facet_deposit_derivation_and_execution() {
 
     // 2. Derive deposit transactions using the facet deposits function
     let l2_chain_id = 16436858;
-    let (deposits, _, _) = derive_facet_deposits(&[envelope], &[receipt], l2_chain_id, 1, 0u128, 0u128)
+    let prev_l1_info = kona_protocol::L1BlockInfoFacet {
+        number: 0,
+        time: 0,
+        base_fee: 0,
+        block_hash: Default::default(),
+        sequence_number: 0,
+        batcher_address: Default::default(),
+        blob_base_fee: 0,
+        blob_base_fee_scalar: 0,
+        base_fee_scalar: 0,
+        empty_scalars: false,
+        l1_fee_overhead: Default::default(),
+        fct_mint_rate: 0,
+        fct_total_minted: 0,
+        fct_period_start_block: 0,
+        fct_period_minted: 0,
+        fct_max_supply: 0,
+        fct_initial_target_per_period: 0,
+    };
+    let (deposits, _, _, _, _) = derive_facet_deposits(&[envelope], &[receipt], l2_chain_id, 1, 0u64, &prev_l1_info)
         .expect("derive failed");
     
     assert_eq!(deposits.len(), 1, "Should derive exactly one deposit");
@@ -63,7 +82,7 @@ fn facet_deposit_derivation_and_execution() {
     }.seal_slow();
     
     // 5. Create payload attributes with our deposit transaction
-    let payload_attrs = OpPayloadAttributes {
+    let _payload_attrs = OpPayloadAttributes {
         payload_attributes: PayloadAttributes {
             timestamp: parent_header.timestamp + 12,
             prev_randao: B256::ZERO,
@@ -78,7 +97,7 @@ fn facet_deposit_derivation_and_execution() {
     };
     
     // 6. Create executor and test block building (structure validation)
-    let mut executor = StatelessL2Builder::new(
+    let _executor = StatelessL2Builder::new(
         &rollup_config,
         OpEvmFactory::default(),
         NoopTrieDBProvider,
