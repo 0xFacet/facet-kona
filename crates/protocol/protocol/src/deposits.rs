@@ -1,7 +1,7 @@
 //! Contains deposit transaction types and helper methods.
 
 use alloc::vec::Vec;
-use alloy_primitives::{Address, B256, Bytes, Log, TxKind, U64, U256, b256};
+use alloy_primitives::{Address, B256, Bytes, Log, TxKind, U64, U256, b256, keccak256, Sealed};
 use op_alloy_consensus::{TxDeposit, UserDepositSource};
 use crate::facet::DEPOSIT_TX_TYPE;
 
@@ -13,6 +13,26 @@ pub fn encode_deposit_with_bluebird_type(deposit: &TxDeposit) -> Vec<u8> {
     // Encode just the RLP payload without the type byte
     deposit.encode(&mut out);
     out
+}
+
+/// Compute the hash of a deposit transaction with mint field set to None
+/// This is required for consensus - the mint field must be treated as None
+/// when computing the transaction hash, even if it has a value.
+pub fn hash_deposit_transaction(deposit: &TxDeposit) -> B256 {
+    // Clone and set mint to None for hashing
+    let mut deposit_for_hash = deposit.clone();
+    deposit_for_hash.mint = None;  // Always None for hash computation
+    
+    // Encode with the Bluebird type byte and compute hash
+    let encoded = encode_deposit_with_bluebird_type(&deposit_for_hash);
+    keccak256(&encoded)
+}
+
+/// Seal a deposit transaction with the correct hash computation
+/// This ensures the mint field is treated as None when computing the hash
+pub fn seal_deposit_with_hash(deposit: TxDeposit) -> Sealed<TxDeposit> {
+    let hash = hash_deposit_transaction(&deposit);
+    Sealed::new_unchecked(deposit, hash)
 }
 
 /// Deposit log event abi signature.
@@ -476,6 +496,52 @@ mod test {
         let mut tx = TxDeposit::default();
         let to = address!("5555555555555555555555555555555555555555");
         unmarshal_deposit_version0(&mut tx, to, &data).unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "std")]
+    fn test_deposit_hash_ignores_mint() {
+        // Create two deposit transactions that are identical except for mint value
+        let deposit_with_mint = TxDeposit {
+            from: address!("1111111111111111111111111111111111111111"),
+            to: TxKind::Call(address!("2222222222222222222222222222222222222222")),
+            value: U256::from(100),
+            gas_limit: 1000,
+            mint: Some(123456789), // Has mint value
+            is_system_transaction: false,
+            source_hash: B256::from([1u8; 32]),
+            ..Default::default()
+        };
+        
+        let deposit_without_mint = TxDeposit {
+            from: address!("1111111111111111111111111111111111111111"),
+            to: TxKind::Call(address!("2222222222222222222222222222222222222222")),
+            value: U256::from(100),
+            gas_limit: 1000,
+            mint: None, // No mint value
+            is_system_transaction: false,
+            source_hash: B256::from([1u8; 32]),
+            ..Default::default()
+        };
+        
+        // Hash both transactions
+        let hash_with_mint = hash_deposit_transaction(&deposit_with_mint);
+        let hash_without_mint = hash_deposit_transaction(&deposit_without_mint);
+        
+        // They should have the same hash since mint is ignored for hashing
+        assert_eq!(hash_with_mint, hash_without_mint, 
+            "Deposit transaction hashes should be identical regardless of mint value");
+        
+        // Also test with seal_deposit_with_hash
+        let sealed_with_mint = seal_deposit_with_hash(deposit_with_mint.clone());
+        let sealed_without_mint = seal_deposit_with_hash(deposit_without_mint.clone());
+        
+        assert_eq!(sealed_with_mint.hash(), sealed_without_mint.hash(),
+            "Sealed deposit hashes should be identical regardless of mint value");
+        
+        // But the mint values should still be preserved in the transaction
+        assert_eq!(sealed_with_mint.mint, Some(123456789));
+        assert_eq!(sealed_without_mint.mint, None);
     }
 
     #[test]

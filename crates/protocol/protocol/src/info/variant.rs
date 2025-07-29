@@ -3,13 +3,13 @@
 
 use alloy_consensus::Header;
 use alloy_eips::{BlockNumHash, eip7840::BlobParams};
-use alloy_primitives::{Address, B256, Bytes, Sealable, Sealed, TxKind, U256, address};
+use alloy_primitives::{Address, B256, Bytes, Sealed, TxKind, U256, address};
 use kona_genesis::{RollupConfig, SystemConfig};
 use op_alloy_consensus::{DepositSourceDomain, L1InfoDepositSource, TxDeposit};
 
 use crate::{
     BlockInfoError, DecodeError, L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus,
-    info::L1BlockInfoFacet, Predeploys,
+    info::L1BlockInfoFacet, Predeploys, deposits::seal_deposit_with_hash,
 };
 
 /// The system transaction gas limit post-Regolith
@@ -180,7 +180,7 @@ impl L1BlockInfoTx {
             deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
         }
 
-        Ok((l1_info, deposit_tx.seal_slow()))
+        Ok((l1_info, seal_deposit_with_hash(deposit_tx)))
     }
 
     /// Decodes the [L1BlockInfoEcotone] object from Ethereum transaction calldata.
@@ -378,7 +378,7 @@ impl L1BlockInfoTx {
             input: l1_info.encode_calldata(),
         };
 
-        Ok((l1_info, deposit_tx.seal_slow()))
+        Ok((l1_info, seal_deposit_with_hash(deposit_tx)))
     }
 }
 
