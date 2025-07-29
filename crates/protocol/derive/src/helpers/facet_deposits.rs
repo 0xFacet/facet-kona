@@ -1,18 +1,9 @@
 use alloc::vec::Vec;
 use alloy_consensus::{Receipt, TxEnvelope, Eip658Value, Transaction};
 use alloy_primitives::{Address, B256, Bytes, Log};
-use alloy_eips::eip2718::Encodable2718;
-use kona_protocol::{decode_facet_payload, alias_l1_to_l2, FACET_INBOX_ADDRESS, FACET_LOG_INBOX_EVENT_SIG, FctMintCalculator, DEPOSIT_TX_TYPE};
+use kona_protocol::{decode_facet_payload, alias_l1_to_l2, FACET_INBOX_ADDRESS, FACET_LOG_INBOX_EVENT_SIG, FctMintCalculator, encode_deposit_with_bluebird_type};
 use op_alloy_consensus::TxDeposit;
 use crate::errors::PipelineEncodingError;
-
-/// Encode a deposit transaction with the Facet deposit type byte (0x7d)
-fn encode_deposit_with_facet_type(deposit: &TxDeposit) -> Vec<u8> {
-    let mut out = Vec::with_capacity(deposit.eip2718_encoded_length() + 1);
-    out.push(DEPOSIT_TX_TYPE);
-    deposit.encode_2718(&mut out);
-    out
-}
 
 /// Derive Optimism `0x7d` deposit transactions from facet inbox calldata + event logs.
 ///
@@ -20,18 +11,18 @@ fn encode_deposit_with_facet_type(deposit: &TxDeposit) -> Vec<u8> {
 /// * `receipts`    – receipts matching `txs` by index
 /// * `l2_chain_id` – Optimism chain id we expect inside the facet RLP
 /// * `l2_block_number` – current L2 block number for mint calculations
-/// * `fct_mint_rate` – facet mint rate from parent block
-/// * `fct_mint_period_l1_data_gas` – facet mint period L1 data gas from parent block
+/// * `l1_base_fee` – L1 base fee for ETH burn calculation
+/// * `prev_l1_info` – Previous L1 block info containing FCT state
 ///
-/// Returns (deposit_transactions, new_mint_rate, new_cumulative_l1_data_gas)
+/// Returns (deposit_transactions, new_mint_rate, new_total_minted, new_period_start_block, new_period_minted)
 pub fn derive_facet_deposits(
     txs: &[TxEnvelope],
     receipts: &[Receipt],
     l2_chain_id: u64,
     l2_block_number: u64,
-    fct_mint_rate: u128,
-    fct_mint_period_l1_data_gas: u128,
-) -> Result<(Vec<Bytes>, u128, u128), PipelineEncodingError> {
+    l1_base_fee: u64,
+    prev_l1_info: &kona_protocol::L1BlockInfoFacet,
+) -> Result<(Vec<Bytes>, u128, u128, u128, u128), PipelineEncodingError> {
     debug_assert_eq!(txs.len(), receipts.len(), "txs/receipts length mismatch");
     
     tracing::info!(
@@ -151,32 +142,24 @@ pub fn derive_facet_deposits(
         }
     }
 
-    // Step 2: Calculate new mint rate based on FCT mint calculation
-    let new_mint_rate = FctMintCalculator::compute_new_rate(
-        l2_block_number,
-        fct_mint_rate,
-        fct_mint_period_l1_data_gas,
-    );
+    // Step 2: Extract just the FacetPayload objects for assign_mint
+    let mut payloads_only: Vec<kona_protocol::FacetPayload> = facet_payloads.iter()
+        .map(|(payload, _, _)| payload.clone())
+        .collect();
 
-    // Step 3: Assign mint amounts to each facet transaction
-    for (payload, _, _) in &mut facet_payloads {
-        let mint_amount = FctMintCalculator::calculate_mint_amount(
-            payload.l1_data_gas_used,
-            new_mint_rate,
+    // Step 3: Call assign_mint to calculate FCT mints and get new state
+    let (new_mint_rate, new_total_minted, new_period_start_block, new_period_minted) = 
+        FctMintCalculator::assign_mint(
+            &mut payloads_only,
+            l2_block_number,
+            l1_base_fee,
+            prev_l1_info,
         );
-        payload.set_mint(mint_amount);
+
+    // Step 4: Update the original payloads with the calculated mint amounts
+    for (i, (payload, _, _)) in facet_payloads.iter_mut().enumerate() {
+        payload.mint = payloads_only[i].mint;
     }
-
-    // Step 4: Calculate new cumulative L1 data gas
-    let batch_l1_data_gas: u64 = facet_payloads.iter()
-        .map(|(payload, _, _)| payload.l1_data_gas_used)
-        .sum();
-
-    let new_cumulative_l1_data_gas = if FctMintCalculator::is_first_block_in_period(l2_block_number) {
-        batch_l1_data_gas as u128
-    } else {
-        fct_mint_period_l1_data_gas + batch_l1_data_gas as u128
-    };
 
     // Step 5: Convert payloads to deposit transactions
     let mut out = Vec::with_capacity(facet_payloads.len());
@@ -204,5 +187,5 @@ pub fn derive_facet_deposits(
         );
     }
 
-    Ok((out, new_mint_rate, new_cumulative_l1_data_gas))
+    Ok((out, new_mint_rate, new_total_minted, new_period_start_block, new_period_minted))
 } 

@@ -123,7 +123,6 @@ impl L1BlockInfoTx {
         // Use default values for the facet-specific fields - these will be overridden
         // by the StatefulAttributesBuilder with calculated values
         let fct_mint_rate = 0u128; // Will be set by caller
-        let fct_mint_period_l1_data_gas = 0u128; // Will be set by caller
         
         Ok(Self::Facet(L1BlockInfoFacet {
             number: l1_header.number,
@@ -138,7 +137,11 @@ impl L1BlockInfoTx {
             empty_scalars: false,
             l1_fee_overhead: U256::ZERO,
             fct_mint_rate,
-            fct_mint_period_l1_data_gas,
+            fct_total_minted: 0,
+            fct_period_start_block: 0,
+            fct_period_minted: 0,
+            fct_max_supply: 0, // Will be set by caller
+            fct_initial_target_per_period: 0, // Will be set by caller
         }))
     }
 
@@ -327,13 +330,15 @@ impl L1BlockInfoTx {
         }
     }
     
-    /// Sets the FCT mint rate and cumulative L1 data gas for Facet variants.
+    /// Sets the FCT mint values for Facet variants.
     /// This is used by the StatefulAttributesBuilder to update the L1 block info
     /// with calculated FCT values after facet deposit processing.
-    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_mint_period_l1_data_gas: u128) {
+    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_total_minted: u128, fct_period_start_block: u128, fct_period_minted: u128) {
         if let Self::Facet(facet) = self {
             facet.fct_mint_rate = fct_mint_rate;
-            facet.fct_mint_period_l1_data_gas = fct_mint_period_l1_data_gas;
+            facet.fct_total_minted = fct_total_minted;
+            facet.fct_period_start_block = fct_period_start_block;
+            facet.fct_period_minted = fct_period_minted;
         }
     }
     
@@ -347,14 +352,15 @@ impl L1BlockInfoTx {
         l1_header: &Header,
         l2_block_time: u64,
         fct_mint_rate: u128,
-        fct_mint_period_l1_data_gas: u128,
+        _fct_mint_period_l1_data_gas: u128,
     ) -> Result<(Self, Sealed<TxDeposit>), BlockInfoError> {
         // Create the L1 info transaction first
         let mut l1_info =
             Self::try_new(rollup_config, system_config, sequence_number, l1_header, l2_block_time)?;
         
         // Set the FCT values if it's a Facet variant
-        l1_info.set_fct_values(fct_mint_rate, fct_mint_period_l1_data_gas);
+        // Only fct_mint_rate is provided, other values will be set later by the caller
+        l1_info.set_fct_values(fct_mint_rate, 0, 0, 0);
 
         let source = DepositSourceDomain::L1Info(L1InfoDepositSource {
             l1_block_hash: l1_info.block_hash(),

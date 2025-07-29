@@ -2,9 +2,18 @@
 
 use alloc::vec::Vec;
 use alloy_primitives::{Address, B256, Bytes, Log, TxKind, U64, U256, b256};
-use alloy_eips::eip2718::Encodable2718;
 use op_alloy_consensus::{TxDeposit, UserDepositSource};
 use crate::facet::DEPOSIT_TX_TYPE;
+
+/// Encode a deposit transaction with the Bluebird type byte (0x7d)
+pub fn encode_deposit_with_bluebird_type(deposit: &TxDeposit) -> Vec<u8> {
+    use alloy_rlp::Encodable;
+    let mut out = Vec::with_capacity(deposit.eip2718_encoded_length());
+    out.push(DEPOSIT_TX_TYPE);
+    // Encode just the RLP payload without the type byte
+    deposit.encode(&mut out);
+    out
+}
 
 /// Deposit log event abi signature.
 pub const DEPOSIT_EVENT_ABI: &str = "TransactionDeposited(address,address,uint256,bytes)";
@@ -179,11 +188,7 @@ pub fn decode_deposit(block_hash: B256, index: usize, log: &Log) -> Result<Bytes
 
     unmarshal_deposit_version0(&mut deposit_tx, to, opaque_data)?;
 
-    // Re-encode the deposit transaction with Facet deposit type byte
-    let mut buffer = Vec::with_capacity(deposit_tx.eip2718_encoded_length() + 1);
-    buffer.push(DEPOSIT_TX_TYPE);
-    deposit_tx.encode_2718(&mut buffer);
-    Ok(Bytes::from(buffer))
+    Ok(encode_deposit_with_bluebird_type(&deposit_tx).into())
 }
 
 /// Unmarshals a deposit transaction from the opaque data.

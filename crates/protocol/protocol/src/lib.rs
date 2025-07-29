@@ -52,13 +52,13 @@ pub use channel::{
 mod deposits;
 pub use deposits::{
     DEPOSIT_EVENT_ABI, DEPOSIT_EVENT_ABI_HASH, DEPOSIT_EVENT_VERSION_0, DepositError,
-    decode_deposit,
+    decode_deposit, encode_deposit_with_bluebird_type,
 };
 
 mod info;
 pub use info::{
     BlockInfoError, DecodeError, L1BlockInfoBedrock, L1BlockInfoEcotone, L1BlockInfoIsthmus,
-    L1BlockInfoTx,
+    L1BlockInfoFacet, L1BlockInfoTx,
 };
 
 mod predeploys;

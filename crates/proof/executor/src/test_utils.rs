@@ -472,5 +472,8 @@ fn create_custom_facet_config(chain_id: u64) -> RollupConfig {
             eip1559_denominator: 8,
             eip1559_denominator_canyon: 8,
         },
+        fct_initial_rate: None,
+        fct_max_supply: None,
+        fct_initial_target_per_period: None,
     }
 }
