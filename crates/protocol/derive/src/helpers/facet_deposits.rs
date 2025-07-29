@@ -165,7 +165,7 @@ pub fn derive_facet_deposits(
     let mut out = Vec::with_capacity(facet_payloads.len());
     for (payload, from, source_hash) in facet_payloads {
         let dep = payload.into_deposit(from, source_hash);
-        let buf = encode_deposit_with_facet_type(&dep);
+        let buf = encode_deposit_with_bluebird_type(&dep);
         out.push(buf.into());
     }
     
