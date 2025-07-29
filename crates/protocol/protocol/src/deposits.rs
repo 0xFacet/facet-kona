@@ -188,7 +188,6 @@ pub fn decode_deposit(block_hash: B256, index: usize, log: &Log) -> Result<Bytes
 
     unmarshal_deposit_version0(&mut deposit_tx, to, opaque_data)?;
 
-    // Re-encode the deposit transaction with Bluebird type byte
     Ok(encode_deposit_with_bluebird_type(&deposit_tx).into())
 }
 
