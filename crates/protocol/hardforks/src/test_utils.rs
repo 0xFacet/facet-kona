@@ -2,7 +2,7 @@
 
 use alloy_eips::Encodable2718;
 use alloy_primitives::{Address, B256, keccak256};
-use op_alloy_consensus::TxDeposit;
+use op_alloy_consensus::{OpTxType, TxDeposit};
 use op_revm::{DefaultOp, OpSpecId, transaction::deposit::DepositTransactionParts};
 use revm::{
     Context, ExecuteCommitEvm, MainBuilder,
@@ -33,7 +33,7 @@ pub(crate) fn check_deployment_code(
             tx.enveloped_tx = Some(deployment_tx.encoded_2718().into());
 
             // Base meta
-            tx.base.tx_type = kona_protocol::DEPOSIT_TX_TYPE;
+            tx.base.tx_type = OpTxType::Deposit as u8;
             tx.base.caller = deployment_tx.from;
             tx.base.kind = deployment_tx.to;
             tx.base.value = deployment_tx.value;

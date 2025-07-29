@@ -470,7 +470,7 @@ mod tests {
     use alloy_rlp::{BytesMut, Encodable};
     use kona_genesis::{ChainGenesis, HardForkConfig, MAX_RLP_BYTES_PER_CHANNEL_FJORD};
     use kona_protocol::{BatchReader, L1BlockInfoBedrock, L1BlockInfoTx};
-    use op_alloy_consensus::{OpBlock, OpTxEnvelope, TxDeposit};
+    use op_alloy_consensus::{OpBlock, OpTxEnvelope, OpTxType, TxDeposit};
     use tracing::Level;
     use tracing_subscriber::layer::SubscriberExt;
 
@@ -1007,7 +1007,7 @@ mod tests {
         };
         let mut buf = BytesMut::new();
         tx.encode(&mut buf);
-        let prefixed = [&[kona_protocol::DEPOSIT_TX_TYPE], &buf[..]].concat();
+        let prefixed = [&[OpTxType::Deposit as u8], &buf[..]].concat();
         second_batch_txs.insert(0, Bytes::copy_from_slice(&prefixed));
         let mut mock = TestNextBatchProvider::new(batch_vec);
         let origin_check =
