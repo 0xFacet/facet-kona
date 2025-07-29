@@ -176,7 +176,6 @@ impl ChainConfig {
             interop_message_expiry_window: DEFAULT_INTEROP_MESSAGE_EXPIRY_WINDOW,
             chain_op_config: self.base_fee_config(),
             alt_da_config: self.alt_da.clone(),
-            fct_initial_rate: None,
         }
     }
 }

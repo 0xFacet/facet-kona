@@ -170,9 +170,7 @@ where
                 base_fee_scalar: 0,
                 empty_scalars: false,
                 l1_fee_overhead: Default::default(),
-                fct_mint_rate: self.rollup_cfg.fct_initial_rate
-                    .and_then(|rate| rate.try_into().ok())
-                    .unwrap_or(0u128),
+                fct_mint_rate: 0,
                 fct_total_minted: 0,
                 fct_period_start_block: 0,
                 fct_period_minted: 0,
@@ -238,13 +236,7 @@ where
                 new_fct_period_start_block = parent_info.fct_period_start_block;
                 new_fct_period_minted = parent_info.fct_period_minted;
             } else {
-                // Genesis case
-                new_fct_mint_rate = self.rollup_cfg.fct_initial_rate
-                    .and_then(|rate| rate.try_into().ok())
-                    .unwrap_or(0u128);
-                new_fct_total_minted = 0;
-                new_fct_period_start_block = 0;
-                new_fct_period_minted = 0;
+                panic!("FATAL: FCT parameters (fct_max_supply, fct_initial_target_per_period) must come from parent L1 info. Cannot validate from genesis.");
             }
             l2_parent.seq_num + 1
         };

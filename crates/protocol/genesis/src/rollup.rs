@@ -3,7 +3,7 @@
 use crate::{AltDAConfig, BaseFeeConfig, ChainGenesis, HardForkConfig, OP_MAINNET_BASE_FEE_CONFIG};
 use alloy_hardforks::{EthereumHardfork, EthereumHardforks, ForkCondition};
 use alloy_op_hardforks::{OpHardfork, OpHardforks};
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 
 /// The max rlp bytes per channel for the Bedrock hardfork.
 pub const MAX_RLP_BYTES_PER_CHANNEL_BEDROCK: u64 = 10_000_000;
@@ -93,9 +93,6 @@ pub struct RollupConfig {
     /// `chain_op_config` is the chain-specific EIP1559 config for the rollup.
     #[cfg_attr(feature = "serde", serde(default = "BaseFeeConfig::optimism"))]
     pub chain_op_config: BaseFeeConfig,
-    /// Initial FCT mint-rate (wei / L1-gas) for the first period
-    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub fct_initial_rate: Option<U256>,
 }
 
 #[cfg(feature = "arbitrary")]
@@ -130,7 +127,6 @@ impl<'a> arbitrary::Arbitrary<'a> for RollupConfig {
             interop_message_expiry_window: u.arbitrary()?,
             chain_op_config,
             alt_da_config: Option::<AltDAConfig>::arbitrary(u)?,
-            fct_initial_rate: Option::<U256>::arbitrary(u)?,
         })
     }
 }
@@ -158,7 +154,6 @@ impl Default for RollupConfig {
             interop_message_expiry_window: DEFAULT_INTEROP_MESSAGE_EXPIRY_WINDOW,
             alt_da_config: None,
             chain_op_config: OP_MAINNET_BASE_FEE_CONFIG,
-            fct_initial_rate: None,
         }
     }
 }
@@ -785,7 +780,6 @@ mod tests {
         "#;
 
         let expected = RollupConfig {
-            fct_initial_rate: None,
             genesis: ChainGenesis {
                 l1: BlockNumHash {
                     hash: b256!("481724ee99b1f4cb71d826e2ec5a37265f460e9b112315665c977f4050b0af54"),
