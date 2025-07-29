@@ -7,9 +7,8 @@ use crate::{
 };
 use alloc::{boxed::Box, fmt::Debug, format, string::ToString, sync::Arc, vec, vec::Vec};
 use alloy_consensus::Transaction;
-use alloy_eips::{BlockNumHash, eip2718::Encodable2718};
+use alloy_eips::BlockNumHash;
 use alloy_primitives::{Address, Bytes};
-use alloy_rlp::Encodable;
 use alloy_rpc_types_engine::PayloadAttributes;
 use async_trait::async_trait;
 use kona_genesis::RollupConfig;
@@ -86,6 +85,17 @@ where
         let new_fct_total_minted: u128;
         let new_fct_period_start_block: u128;
         let new_fct_period_minted: u128;
+        // Pull static FCT parameters from rollup config (fall back to zero if absent)
+        let default_fct_max_supply: u128 = self
+            .rollup_cfg
+            .fct_max_supply
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or(0u128);
+        let default_fct_initial_target_per_period: u128 = self
+            .rollup_cfg
+            .fct_initial_target_per_period
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or(0u128);
         
         // Read parent L1 info from parent block (needed for both new and continuing epochs)
         let parent_l1_info = if l2_parent.block_info.number > 0 {
@@ -177,8 +187,8 @@ where
                 fct_total_minted: 0,
                 fct_period_start_block: 0,
                 fct_period_minted: 0,
-                fct_max_supply: 0,
-                fct_initial_target_per_period: 0,
+                fct_max_supply: default_fct_max_supply,
+                fct_initial_target_per_period: default_fct_initial_target_per_period,
             });
             
             let (deposits, rate, total_minted, period_start_block, period_minted) = derive_facet_deposits(
@@ -299,6 +309,15 @@ where
         .map_err(|e| {
             PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit()
         })?;
+        // Ensure static FCT parameters are populated for Facet variant
+        if let L1BlockInfoTx::Facet(ref mut facet_info) = l1_info_tx {
+            if facet_info.fct_max_supply == 0 {
+                facet_info.fct_max_supply = default_fct_max_supply;
+            }
+            if facet_info.fct_initial_target_per_period == 0 {
+                facet_info.fct_initial_target_per_period = default_fct_initial_target_per_period;
+            }
+        }
 
         // Update the Facet-specific FCT values before encoding.
         l1_info_tx.set_fct_values(
@@ -330,9 +349,7 @@ where
             deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
         }
 
-        let mut encoded_l1_info_tx =
-            Vec::with_capacity(deposit_tx.eip2718_encoded_length());
-        deposit_tx.encode_2718(&mut encoded_l1_info_tx);
+        let encoded_l1_info_tx = kona_protocol::encode_deposit_with_bluebird_type(&deposit_tx);
 
         let mut txs =
             Vec::with_capacity(1 + deposit_transactions.len() + upgrade_transactions.len());

@@ -1,18 +1,9 @@
 use alloc::vec::Vec;
 use alloy_consensus::{Receipt, TxEnvelope, Eip658Value, Transaction};
 use alloy_primitives::{Address, B256, Bytes, Log};
-use alloy_eips::eip2718::Encodable2718;
-use kona_protocol::{decode_facet_payload, alias_l1_to_l2, FACET_INBOX_ADDRESS, FACET_LOG_INBOX_EVENT_SIG, FctMintCalculator, DEPOSIT_TX_TYPE};
+use kona_protocol::{decode_facet_payload, alias_l1_to_l2, FACET_INBOX_ADDRESS, FACET_LOG_INBOX_EVENT_SIG, FctMintCalculator, encode_deposit_with_bluebird_type};
 use op_alloy_consensus::TxDeposit;
 use crate::errors::PipelineEncodingError;
-
-/// Encode a deposit transaction with the Bluebird type byte (0x7d)
-fn encode_deposit_with_bluebird_type(deposit: &TxDeposit) -> Vec<u8> {
-    let mut out = Vec::with_capacity(deposit.eip2718_encoded_length() + 1);
-    out.push(DEPOSIT_TX_TYPE);
-    deposit.encode_2718(&mut out);
-    out
-}
 
 /// Derive Optimism `0x7d` deposit transactions from facet inbox calldata + event logs.
 ///

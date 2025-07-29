@@ -52,7 +52,7 @@ pub use channel::{
 mod deposits;
 pub use deposits::{
     DEPOSIT_EVENT_ABI, DEPOSIT_EVENT_ABI_HASH, DEPOSIT_EVENT_VERSION_0, DepositError,
-    decode_deposit,
+    decode_deposit, encode_deposit_with_bluebird_type,
 };
 
 mod info;
