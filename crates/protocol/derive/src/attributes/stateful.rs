@@ -333,21 +333,16 @@ where
             seq_number: sequence_number,
         });
 
-        let mut deposit_tx = TxDeposit {
+        let deposit_tx = TxDeposit {
             source_hash: source.source_hash(),
             from: L1_INFO_DEPOSITOR_ADDRESS,
             to: TxKind::Call(Predeploys::L1_BLOCK_INFO),
             mint: None,
             value: U256::ZERO,
-            gas_limit: 150_000_000,
-            is_system_transaction: true,
+            gas_limit: REGOLITH_SYSTEM_TX_GAS,
+            is_system_transaction: false,
             input: l1_info_tx.encode_calldata(),
         };
-
-        if self.rollup_cfg.is_regolith_active(next_l2_time) {
-            deposit_tx.is_system_transaction = false;
-            deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
-        }
 
         let encoded_l1_info_tx = kona_protocol::encode_deposit_with_bluebird_type(&deposit_tx);
 

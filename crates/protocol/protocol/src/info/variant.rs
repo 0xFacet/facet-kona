@@ -341,45 +341,6 @@ impl L1BlockInfoTx {
             facet.fct_period_minted = fct_period_minted;
         }
     }
-    
-    /// Creates a new [L1BlockInfoTx] and corresponding [TxDeposit] with custom FCT values.
-    /// This is used for Facet chains where FCT mint parameters need to be calculated
-    /// based on the current block's facet deposits.
-    pub fn try_new_with_deposit_tx_and_fct_values(
-        rollup_config: &RollupConfig,
-        system_config: &SystemConfig,
-        sequence_number: u64,
-        l1_header: &Header,
-        l2_block_time: u64,
-        fct_mint_rate: u128,
-        _fct_mint_period_l1_data_gas: u128,
-    ) -> Result<(Self, Sealed<TxDeposit>), BlockInfoError> {
-        // Create the L1 info transaction first
-        let mut l1_info =
-            Self::try_new(rollup_config, system_config, sequence_number, l1_header, l2_block_time)?;
-        
-        // Set the FCT values if it's a Facet variant
-        // Only fct_mint_rate is provided, other values will be set later by the caller
-        l1_info.set_fct_values(fct_mint_rate, 0, 0, 0);
-
-        let source = DepositSourceDomain::L1Info(L1InfoDepositSource {
-            l1_block_hash: l1_info.block_hash(),
-            seq_number: sequence_number,
-        });
-
-        let deposit_tx = TxDeposit {
-            source_hash: source.source_hash(),
-            from: L1_INFO_DEPOSITOR_ADDRESS,
-            to: TxKind::Call(Predeploys::L1_BLOCK_INFO),
-            mint: None,
-            value: U256::ZERO,
-            gas_limit: REGOLITH_SYSTEM_TX_GAS,
-            is_system_transaction: false,
-            input: l1_info.encode_calldata(),
-        };
-
-        Ok((l1_info, seal_deposit_with_hash(deposit_tx)))
-    }
 }
 
 #[cfg(test)]

@@ -273,7 +273,7 @@ impl SpanBatch {
                     );
                     return BatchValidity::Drop;
                 }
-                if tx.as_ref().first() == Some(&(OpTxType::Deposit as u8)) {
+                if tx.as_ref().first() == Some(&crate::DEPOSIT_TX_TYPE) {
                     warn!(
                         "sequencers may not embed any deposits into batch data, but found tx that has one, tx_index: {}",
                         i
@@ -1689,7 +1689,7 @@ mod tests {
         let second = SpanBatchElement {
             epoch_num: 10,
             timestamp: 20,
-            transactions: vec![Bytes::copy_from_slice(&[OpTxType::Deposit as u8])],
+            transactions: vec![Bytes::copy_from_slice(&[crate::DEPOSIT_TX_TYPE])],
         };
         let third =
             SpanBatchElement { epoch_num: 11, timestamp: 20, transactions: vec![filler_bytes] };

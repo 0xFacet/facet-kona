@@ -14,7 +14,7 @@ use kona_derive::{
 use kona_executor::BlockBuildingOutcome;
 use kona_genesis::RollupConfig;
 use kona_protocol::{L2BlockInfo, OpAttributesWithParent};
-use op_alloy_consensus::{OpBlock, OpTxEnvelope, OpTxType};
+use op_alloy_consensus::{OpBlock, OpTxEnvelope};
 use spin::RwLock;
 
 /// The Rollup Driver entrypoint.
@@ -133,7 +133,7 @@ where
                         // Strip out all transactions that are not deposits.
                         attributes.transactions = attributes.transactions.map(|txs| {
                             txs.into_iter()
-                                .filter(|tx| (!tx.is_empty() && tx[0] == OpTxType::Deposit as u8))
+                                .filter(|tx| (!tx.is_empty() && tx[0] == kona_protocol::DEPOSIT_TX_TYPE))
                                 .collect::<Vec<_>>()
                         });
 

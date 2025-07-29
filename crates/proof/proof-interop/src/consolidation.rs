@@ -15,7 +15,7 @@ use kona_preimage::CommsClient;
 use kona_proof::{errors::OracleProviderError, l2::OracleL2ChainProvider};
 use kona_protocol::OutputRoot;
 use kona_registry::{HashMap, ROLLUP_CONFIGS};
-use op_alloy_consensus::{InteropBlockReplacementDepositSource, OpTxEnvelope, OpTxType, TxDeposit};
+use op_alloy_consensus::{InteropBlockReplacementDepositSource, OpTxEnvelope, TxDeposit};
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
 use op_revm::OpSpecId;
 use thiserror::Error;
@@ -139,7 +139,7 @@ where
             // Explicitly panic if a block sent off for re-execution already contains nothing but
             // deposits.
             assert!(
-                !transactions.iter().all(|f| !f.is_empty() && f[0] == OpTxType::Deposit),
+                !transactions.iter().all(|f| !f.is_empty() && f[0] == kona_protocol::DEPOSIT_TX_TYPE),
                 "Impossible case; Block with only deposits found to be invalid. Something has gone horribly wrong!"
             );
 
@@ -167,7 +167,7 @@ where
             // Filter out all transactions that are not deposits to start.
             let mut transactions = transactions
                 .into_iter()
-                .filter(|t| !t.is_empty() && t[0] == OpTxType::Deposit)
+                .filter(|t| !t.is_empty() && t[0] == kona_protocol::DEPOSIT_TX_TYPE)
                 .collect::<Vec<_>>();
 
             // Add the deposit replacement system transaction at the end of the list.

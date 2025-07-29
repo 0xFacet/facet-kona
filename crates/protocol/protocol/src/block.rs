@@ -7,7 +7,7 @@ use alloy_primitives::B256;
 use alloy_rpc_types_engine::ExecutionPayload;
 use derive_more::Display;
 use kona_genesis::ChainGenesis;
-use op_alloy_consensus::{OpTxEnvelope, OpTxType};
+use op_alloy_consensus::OpTxEnvelope;
 
 /// Block Header Info
 #[derive(Debug, Clone, Display, Copy, Eq, Hash, PartialEq, Default)]
@@ -222,7 +222,7 @@ impl L2BlockInfo {
 
             match transactions.first() {
                 Some(tx) => {
-                    if tx.is_empty() || tx[0] != OpTxType::Deposit as u8 {
+                    if tx.is_empty() || tx[0] != crate::DEPOSIT_TX_TYPE {
                         return Err(FromBlockError::FirstTxNonDeposit(transactions[0][0]));
                     }
 
