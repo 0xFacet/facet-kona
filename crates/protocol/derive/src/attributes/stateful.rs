@@ -85,17 +85,6 @@ where
         let new_fct_total_minted: u128;
         let new_fct_period_start_block: u128;
         let new_fct_period_minted: u128;
-        // Pull static FCT parameters from rollup config (fall back to zero if absent)
-        let default_fct_max_supply: u128 = self
-            .rollup_cfg
-            .fct_max_supply
-            .and_then(|v| v.try_into().ok())
-            .unwrap_or(0u128);
-        let default_fct_initial_target_per_period: u128 = self
-            .rollup_cfg
-            .fct_initial_target_per_period
-            .and_then(|v| v.try_into().ok())
-            .unwrap_or(0u128);
         
         // Read parent L1 info from parent block (needed for both new and continuing epochs)
         let parent_l1_info = if l2_parent.block_info.number > 0 {
@@ -187,8 +176,8 @@ where
                 fct_total_minted: 0,
                 fct_period_start_block: 0,
                 fct_period_minted: 0,
-                fct_max_supply: default_fct_max_supply,
-                fct_initial_target_per_period: default_fct_initial_target_per_period,
+                fct_max_supply: 0,  // Will be set from parent L1 info
+                fct_initial_target_per_period: 0,  // Will be set from parent L1 info
             });
             
             let (deposits, rate, total_minted, period_start_block, period_minted) = derive_facet_deposits(
@@ -309,13 +298,15 @@ where
         .map_err(|e| {
             PipelineError::AttributesBuilder(BuilderError::Custom(e.to_string())).crit()
         })?;
-        // Ensure static FCT parameters are populated for Facet variant
+        // Ensure static FCT parameters are populated for Facet variant from parent L1 info
         if let L1BlockInfoTx::Facet(ref mut facet_info) = l1_info_tx {
-            if facet_info.fct_max_supply == 0 {
-                facet_info.fct_max_supply = default_fct_max_supply;
-            }
-            if facet_info.fct_initial_target_per_period == 0 {
-                facet_info.fct_initial_target_per_period = default_fct_initial_target_per_period;
+            // These values MUST come from the parent L1 info
+            if let Some(parent_info) = parent_l1_info {
+                facet_info.fct_max_supply = parent_info.fct_max_supply;
+                facet_info.fct_initial_target_per_period = parent_info.fct_initial_target_per_period;
+            } else {
+                // This should never happen since we only validate from known good blocks
+                panic!("FATAL: FCT parameters (fct_max_supply, fct_initial_target_per_period) must come from parent L1 info. Cannot validate from genesis.");
             }
         }
 

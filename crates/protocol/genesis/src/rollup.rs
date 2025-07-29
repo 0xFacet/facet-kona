@@ -93,12 +93,6 @@ pub struct RollupConfig {
     /// `chain_op_config` is the chain-specific EIP1559 config for the rollup.
     #[cfg_attr(feature = "serde", serde(default = "BaseFeeConfig::optimism"))]
     pub chain_op_config: BaseFeeConfig,
-    /// Maximum FCT supply in wei
-    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub fct_max_supply: Option<U256>,
-    /// Initial target mint per period in wei
-    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub fct_initial_target_per_period: Option<U256>,
     /// Initial FCT mint-rate (wei / L1-gas) for the first period
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub fct_initial_rate: Option<U256>,
@@ -136,8 +130,6 @@ impl<'a> arbitrary::Arbitrary<'a> for RollupConfig {
             interop_message_expiry_window: u.arbitrary()?,
             chain_op_config,
             alt_da_config: Option::<AltDAConfig>::arbitrary(u)?,
-            fct_max_supply: Option::<U256>::arbitrary(u)?,
-            fct_initial_target_per_period: Option::<U256>::arbitrary(u)?,
             fct_initial_rate: Option::<U256>::arbitrary(u)?,
         })
     }
@@ -166,8 +158,6 @@ impl Default for RollupConfig {
             interop_message_expiry_window: DEFAULT_INTEROP_MESSAGE_EXPIRY_WINDOW,
             alt_da_config: None,
             chain_op_config: OP_MAINNET_BASE_FEE_CONFIG,
-            fct_max_supply: None,
-            fct_initial_target_per_period: None,
             fct_initial_rate: None,
         }
     }
@@ -795,6 +785,7 @@ mod tests {
         "#;
 
         let expected = RollupConfig {
+            fct_initial_rate: None,
             genesis: ChainGenesis {
                 l1: BlockNumHash {
                     hash: b256!("481724ee99b1f4cb71d826e2ec5a37265f460e9b112315665c977f4050b0af54"),
