@@ -48,7 +48,7 @@ class FacetBulkValidator
     
     # Process blocks in parallel with progress bar
     # Use in_processes for better parallelism with external commands
-    parallel_results = Parallel.map(blocks, in_processes: options[:workers], progress: "Validating") do |block|
+    parallel_results = Parallel.map(blocks, in_threads: options[:workers], progress: "Validating") do |block|
       validate_block(block)
     end
     
