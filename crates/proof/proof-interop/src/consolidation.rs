@@ -139,7 +139,7 @@ where
             // Explicitly panic if a block sent off for re-execution already contains nothing but
             // deposits.
             assert!(
-                !transactions.iter().all(|f| !f.is_empty() && f[0] == OpTxType::Deposit as u8),
+                !transactions.iter().all(|f| !f.is_empty() && f[0] == OpTxType::Deposit),
                 "Impossible case; Block with only deposits found to be invalid. Something has gone horribly wrong!"
             );
 
@@ -167,7 +167,7 @@ where
             // Filter out all transactions that are not deposits to start.
             let mut transactions = transactions
                 .into_iter()
-                .filter(|t| !t.is_empty() && t[0] == OpTxType::Deposit as u8)
+                .filter(|t| !t.is_empty() && t[0] == OpTxType::Deposit)
                 .collect::<Vec<_>>();
 
             // Add the deposit replacement system transaction at the end of the list.
