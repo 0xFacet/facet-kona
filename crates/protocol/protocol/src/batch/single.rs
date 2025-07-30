@@ -28,7 +28,7 @@ pub struct SingleBatch {
 impl SingleBatch {
     /// If any transactions are empty or deposited transaction types.
     pub fn has_invalid_transactions(&self) -> bool {
-        self.transactions.iter().any(|tx| tx.0.is_empty() || tx.0[0] == crate::DEPOSIT_TX_TYPE)
+        self.transactions.iter().any(|tx| tx.0.is_empty() || tx.0[0] == OpTxType::Deposit as u8)
     }
 
     /// Returns the [BlockNumHash] of the batch.
@@ -171,7 +171,7 @@ impl SingleBatch {
             if tx.is_empty() {
                 return BatchValidity::Drop;
             }
-            if tx.as_ref().first() == Some(&crate::DEPOSIT_TX_TYPE) {
+            if tx.as_ref().first() == Some(&(OpTxType::Deposit as u8)) {
                 return BatchValidity::Drop;
             }
             // If isthmus is not active yet and the transaction is a 7702, drop the batch.

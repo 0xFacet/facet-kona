@@ -2,6 +2,7 @@
 
 use crate::L2BlockInfo;
 use alloc::vec;
+use op_alloy_consensus::OpTxType;
 use op_alloy_rpc_types_engine::OpPayloadAttributes;
 
 /// Optimism Payload Attributes with parent block reference.
@@ -46,7 +47,7 @@ impl OpAttributesWithParent {
         self.attributes
             .transactions
             .iter()
-            .all(|tx| tx.first().is_some_and(|tx| tx[0] == crate::DEPOSIT_TX_TYPE))
+            .all(|tx| tx.first().is_some_and(|tx| tx[0] == OpTxType::Deposit as u8))
     }
 
     /// Converts the [`OpAttributesWithParent`] into a deposits-only payload.
@@ -55,7 +56,7 @@ impl OpAttributesWithParent {
             attributes: OpPayloadAttributes {
                 transactions: self.attributes.transactions.as_ref().map(|txs| {
                     txs.iter()
-                        .map(|_| alloy_primitives::Bytes::from(vec![crate::DEPOSIT_TX_TYPE]))
+                        .map(|_| alloy_primitives::Bytes::from(vec![OpTxType::Deposit as u8]))
                         .collect()
                 }),
                 ..self.attributes.clone()
