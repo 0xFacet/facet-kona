@@ -14,6 +14,9 @@ use revm::{
     context_interface::block::BlobExcessGasAndPrice,
 };
 
+/// Minimum base fee in wei (1M wei)
+const MIN_BASE_FEE: u128 = 1_000_000;
+
 impl<P, H, Evm> StatelessL2Builder<'_, P, H, Evm>
 where
     P: TrieDBProvider,
@@ -59,7 +62,7 @@ where
             .or_else(|| spec_id.is_enabled_in(OpSpecId::ECOTONE).then_some(0))
             .map(|e| BlobExcessGasAndPrice::new(e, spec_id.is_enabled_in(OpSpecId::ISTHMUS)));
         let next_block_base_fee =
-            parent_header.next_block_base_fee(*base_fee_params).unwrap_or_default();
+            parent_header.next_block_base_fee(*base_fee_params).unwrap_or_default().max(MIN_BASE_FEE as u64);
 
         Ok(BlockEnv {
             number: parent_header.number + 1,

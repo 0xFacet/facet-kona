@@ -34,7 +34,7 @@
   "protocol_versions_address": "0x0000000000000000000000000000000000000001",
   "granite_channel_timeout": 50,
   "chain_op_config": {
-    "eip1559_elasticity": 2,
+    "eip1559_elasticity": 3,
     "eip1559_denominator": 8,
     "eip1559_denominator_canyon": 8
   }
