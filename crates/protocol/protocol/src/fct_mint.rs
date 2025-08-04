@@ -231,7 +231,7 @@ impl FctMintCalculator {
     
     /// Target number of blocks in halving period
     pub fn target_num_blocks_in_halving() -> BigRational {
-        BigRational::from_u32(2_628_000).unwrap()
+        BigRational::from_u32(2_628_000 * 2).unwrap()
     }
     
     /// Calculate L1 data gas used for a transaction based on its input data
