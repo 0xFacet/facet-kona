@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, Bytes, TxKind, B256, U256};
-use alloy_rlp::{RlpDecodable, RlpEncodable, Decodable};
+use alloy_rlp::{RlpDecodable, RlpEncodable};
 use op_alloy_consensus::TxDeposit;
 use crate::FctMintCalculator;
 use alloc::string::{String, ToString};
@@ -7,8 +7,8 @@ use alloc::format;
 
 /// Prefix byte identifying a Facet payload.
 pub const FACET_TX_TYPE: u8 = 0x46;
-/// Prefix byte for an Optimism deposit.
-pub const DEPOSIT_TX_TYPE: u8 = 0x7e;
+/// Prefix byte for Facet deposit transactions.
+pub const DEPOSIT_TX_TYPE: u8 = 0x7d;
 
 /// 0x1111000000000000000000000000000000001111 per OP Stack address aliasing rule.
 const ALIAS_OFFSET: U256 = U256::from_be_bytes([
@@ -75,7 +75,9 @@ pub fn decode_facet_payload(bytes: &[u8], l2_chain_id: u64, contract_initiated: 
     }
     
     let rlp_data = &bytes[1..];
-    let rlp_payload = FacetPayloadRlp::decode(&mut &rlp_data[..]).map_err(|e| DecodeError::Rlp(e.to_string()))?;
+    // Use decode_exact which ensures all bytes are consumed (strict mode)
+    let rlp_payload = alloy_rlp::decode_exact::<FacetPayloadRlp>(rlp_data)
+        .map_err(|e| DecodeError::Rlp(e.to_string()))?;
     
     if rlp_payload.chain_id != l2_chain_id {
         return Err(DecodeError::BadChainId(rlp_payload.chain_id, l2_chain_id));

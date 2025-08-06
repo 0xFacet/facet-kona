@@ -130,7 +130,7 @@ alloy-transport-http = { version = "0.15.8", default-features = false }
 alloy-rpc-types-engine = { version = "0.15.8", default-features = false }
 alloy-rpc-types-beacon = { version = "0.15.8", default-features = false }
 alloy-network-primitives = { version = "0.15.8", default-features = false }
-alloy-hardforks = { version = "0.2.0", default-features = false }
+alloy-hardforks = { version = "=0.2.7", default-features = false }
 
 # OP Alloy
 op-alloy-network = { version = "=0.15.4", default-features = false }
@@ -139,7 +139,7 @@ op-alloy-consensus = { version = "=0.15.4", default-features = false }
 op-alloy-rpc-types = { version = "=0.15.4", default-features = false }
 op-alloy-rpc-jsonrpsee = { version = "=0.15.4", default-features = false }
 op-alloy-rpc-types-engine = { version = "=0.15.4", default-features = false }
-alloy-op-hardforks = { version = "0.2.0", default-features = false }
+alloy-op-hardforks = { version = "=0.2.7", default-features = false }
 
 # Execution
 revm = { version = "22.0.1", default-features = false }
@@ -233,23 +233,37 @@ secp256k1 = { version = "0.31.0", default-features = false }
 ark-bls12-381 = { version = "0.5.0", default-features = false }
 
 # REVM dependencies are patched to use Facet's fork with FCT support
-# By default, this uses the v3.0.1-facet tag from GitHub.
+# By default, this uses the v3.1.0-facet tag from GitHub.
 # 
 # For local development, uncomment the path-based patches below and comment out the git patches:
 [patch.crates-io]
-revm = { version = "22.0.1", git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-bytecode = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-context = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-context-interface = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-database = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-database-interface = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-handler = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-inspector = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-interpreter = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-precompile = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-primitives = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-revm-state = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
-op-revm = { version = "3.0.1", git = "https://github.com/0xFacet/facet-revm", tag = "v3.0.1-facet" }
+# OP Alloy patches to use Facet's fork with 0x7d deposit type
+# op-alloy-network = { path = "../facet-op-alloy/crates/network" }
+# op-alloy-provider = { path = "../facet-op-alloy/crates/provider" }
+# op-alloy-consensus = { path = "../facet-op-alloy/crates/consensus" }
+# op-alloy-rpc-types = { path = "../facet-op-alloy/crates/rpc-types" }
+# op-alloy-rpc-jsonrpsee = { path = "../facet-op-alloy/crates/rpc-jsonrpsee" }
+# op-alloy-rpc-types-engine = { path = "../facet-op-alloy/crates/rpc-types-engine" }
+# For GitHub development, uncomment these lines and comment out the path-based patches above:
+op-alloy-network = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+op-alloy-provider = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+op-alloy-consensus = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+op-alloy-rpc-types = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+op-alloy-rpc-jsonrpsee = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+op-alloy-rpc-types-engine = { git = "https://github.com/0xFacet/facet-op-alloy", tag = "v0.15.4-facet" }
+revm = { version = "22.0.1", git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-bytecode = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-context = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-context-interface = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-database = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-database-interface = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-handler = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-inspector = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-interpreter = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-precompile = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-primitives = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+revm-state = { git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
+op-revm = { version = "3.0.1", git = "https://github.com/0xFacet/facet-revm", tag = "v3.1.0-facet" }
 # For local development, uncomment these lines and comment out the git patches above:
 # revm = { version = "22.0.1", path = "../revm/crates/revm" }
 # revm-bytecode = { path = "../revm/crates/bytecode" }

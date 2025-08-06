@@ -1,7 +1,5 @@
 //! Contains deposit transaction types and helper methods.
 
-use alloc::vec::Vec;
-use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Address, B256, Bytes, Log, TxKind, U64, U256, b256};
 use op_alloy_consensus::{TxDeposit, UserDepositSource};
 
@@ -178,10 +176,10 @@ pub fn decode_deposit(block_hash: B256, index: usize, log: &Log) -> Result<Bytes
 
     unmarshal_deposit_version0(&mut deposit_tx, to, opaque_data)?;
 
-    // Re-encode the deposit transaction
-    let mut buffer = Vec::with_capacity(deposit_tx.eip2718_encoded_length());
-    deposit_tx.encode_2718(&mut buffer);
-    Ok(Bytes::from(buffer))
+    // Return the deposit transaction as bytes with EIP-2718 encoding
+    // This includes the 0x7d type byte prefix
+    use alloy_eips::eip2718::Encodable2718;
+    Ok(deposit_tx.encoded_2718().into())
 }
 
 /// Unmarshals a deposit transaction from the opaque data.
@@ -406,7 +404,7 @@ mod test {
         };
         let tx = decode_deposit(B256::default(), 0, &log).unwrap();
         let raw_hex = hex!(
-            "7ef887a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a14594ffffffffffffffffffffffffffffffffffffffff94bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb80808080b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "7df887a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a14594ffffffffffffffffffffffffffffffffffffffff94bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb80808080b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
         let expected = Bytes::from(raw_hex);
         assert_eq!(tx, expected);
@@ -450,7 +448,7 @@ mod test {
         };
         let tx = decode_deposit(B256::default(), 0, &log).unwrap();
         let raw_hex = hex!(
-            "7ef875a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a145941111111111111111111111111111111111111111800a648203e880b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+            "7df875a0ed428e1c45e1d9561b62834e1a2d3015a0caae3bfdc16b4da059ac885b01a145941111111111111111111111111111111111111111800a648203e880b700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
         );
         let expected = Bytes::from(raw_hex);
         assert_eq!(tx, expected);
@@ -470,6 +468,7 @@ mod test {
         let to = address!("5555555555555555555555555555555555555555");
         unmarshal_deposit_version0(&mut tx, to, &data).unwrap();
     }
+
 
     #[test]
     fn test_unmarshal_deposit_version0() {

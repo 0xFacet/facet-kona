@@ -3274,9 +3274,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.26"
+version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
+checksum = "0beca50380b1fc32983fc1cb4587bfa4bb9e78fc259aad4a0032d2080309222d"
 dependencies = [
  "bytes",
  "fnv",
@@ -3535,7 +3535,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2 0.3.26",
+ "h2 0.3.27",
  "http 0.2.12",
  "http-body 0.4.6",
  "httparse",
@@ -5022,6 +5022,9 @@ dependencies = [
  "kona-genesis",
  "kona-protocol",
  "miniz_oxide",
+ "num-bigint",
+ "num-rational",
+ "num-traits",
  "op-alloy-consensus",
  "op-alloy-rpc-types",
  "op-alloy-rpc-types-engine",
@@ -6295,8 +6298,7 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 [[package]]
 name = "op-alloy-consensus"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375b501fad264f16781b608252b1b14c627359cc90cc09e80f6cbdac03fd8f07"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips 0.15.11",
@@ -6312,8 +6314,7 @@ dependencies = [
 [[package]]
 name = "op-alloy-network"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e65a776c7783650a4ffdf15bdf0526f4b8bdbe00b26df5aeeb1aa2939c6554f"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-consensus",
  "alloy-network",
@@ -6327,8 +6328,7 @@ dependencies = [
 [[package]]
 name = "op-alloy-provider"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e25ed2629159706da365988e278515740ee993f6e5b07531148cf88ea5a6ee8d"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-network",
  "alloy-primitives",
@@ -6342,8 +6342,7 @@ dependencies = [
 [[package]]
 name = "op-alloy-rpc-jsonrpsee"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9ce30de9f0e222c863ac8bd97f6f9a7eb6f7fb74309e2fbb6b5aca0035a66fb"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-primitives",
  "jsonrpsee 0.24.9",
@@ -6352,8 +6351,7 @@ dependencies = [
 [[package]]
 name = "op-alloy-rpc-types"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1436a5d45b7620bbba236201236ef644abd943258b6349dc5e5a147d65a1fac4"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips 0.15.11",
@@ -6371,8 +6369,7 @@ dependencies = [
 [[package]]
 name = "op-alloy-rpc-types-engine"
 version = "0.15.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b9767e25626d237857803577081a27082b2fd367934953e1144af433b1f4e07"
+source = "git+https://github.com/0xFacet/facet-op-alloy?tag=v0.15.4-facet#14a7313f8db7ac86a67b8ca9ac0e4bfba7d6699b"
 dependencies = [
  "alloy-consensus",
  "alloy-eips 0.15.11",
@@ -6391,7 +6388,7 @@ dependencies = [
 [[package]]
 name = "op-revm"
 version = "3.0.2"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "auto_impl",
  "once_cell",
@@ -7340,7 +7337,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.3.26",
+ "h2 0.3.27",
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.32",
@@ -7418,7 +7415,7 @@ checksum = "95325155c684b1c89f7765e30bc1c42e4a6da51ca513615660cb8a62ef9a88e3"
 [[package]]
 name = "revm"
 version = "22.0.1"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "revm-bytecode",
  "revm-context",
@@ -7436,7 +7433,7 @@ dependencies = [
 [[package]]
 name = "revm-bytecode"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "bitvec",
  "phf",
@@ -7447,7 +7444,7 @@ dependencies = [
 [[package]]
 name = "revm-context"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "cfg-if",
  "derive-where",
@@ -7462,7 +7459,7 @@ dependencies = [
 [[package]]
 name = "revm-context-interface"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "alloy-eip2930",
  "alloy-eip7702",
@@ -7476,7 +7473,7 @@ dependencies = [
 [[package]]
 name = "revm-database"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "alloy-eips 0.14.0",
  "revm-bytecode",
@@ -7489,7 +7486,7 @@ dependencies = [
 [[package]]
 name = "revm-database-interface"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "auto_impl",
  "revm-primitives",
@@ -7500,7 +7497,7 @@ dependencies = [
 [[package]]
 name = "revm-handler"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "auto_impl",
  "revm-bytecode",
@@ -7517,7 +7514,7 @@ dependencies = [
 [[package]]
 name = "revm-inspector"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "auto_impl",
  "revm-context",
@@ -7533,7 +7530,7 @@ dependencies = [
 [[package]]
 name = "revm-interpreter"
 version = "18.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "revm-bytecode",
  "revm-context-interface",
@@ -7544,7 +7541,7 @@ dependencies = [
 [[package]]
 name = "revm-precompile"
 version = "19.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -7568,7 +7565,7 @@ dependencies = [
 [[package]]
 name = "revm-primitives"
 version = "18.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "alloy-primitives",
  "enumn",
@@ -7578,7 +7575,7 @@ dependencies = [
 [[package]]
 name = "revm-state"
 version = "3.0.0"
-source = "git+https://github.com/0xFacet/facet-revm?tag=v3.0.1-facet#bb6ba840bbf1f3ee89eeb80be118d21c028bd58b"
+source = "git+https://github.com/0xFacet/facet-revm?tag=v3.1.0-facet#b1a61e33e9984d8f557c143b6cc0f7f05750a454"
 dependencies = [
  "bitflags 2.9.1",
  "revm-bytecode",

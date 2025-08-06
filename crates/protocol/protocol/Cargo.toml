@@ -39,6 +39,11 @@ async-trait.workspace = true
 unsigned-varint.workspace = true
 derive_more = { workspace = true, features = ["display"] }
 
+# Rational numbers for FCT calculations
+num-bigint = { version = "0.4", default-features = false }
+num-rational = { version = "0.4", default-features = false, features = ["num-bigint"] }
+num-traits = { version = "0.2", default-features = false }
+
 # Compression
 brotli.workspace = true
 miniz_oxide.workspace = true
@@ -84,7 +89,10 @@ std = [
   "alloy-serde?/std",
   "miniz_oxide/std",
   "thiserror/std",
-  "unsigned-varint/std"
+  "unsigned-varint/std",
+  "num-bigint/std",
+  "num-rational/std",
+  "num-traits/std"
 ]
 test-utils = [
   "dep:spin",

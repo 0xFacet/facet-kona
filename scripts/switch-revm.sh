@@ -6,7 +6,7 @@ usage() {
     echo "Usage: $0 [github|local]"
     echo ""
     echo "Switch between GitHub and local REVM dependencies:"
-    echo "  github - Use 0xFacet/facet-revm branch (default)"
+    echo "  github - Use 0xFacet/facet-revm tag v3.1.0-facet (default)"
     echo "  local  - Use local REVM development path"
     echo ""
     echo "Example:"
@@ -100,7 +100,7 @@ else
     /^# op-revm = { version = "3.0.1", git = "https:\/\/github.com\/0xFacet\/facet-revm"/s/^# //
     ' Cargo.toml
     
-    echo "✅ Switched to GitHub REVM (0xFacet/facet-revm)"
+    echo "✅ Switched to GitHub REVM (0xFacet/facet-revm tag v3.1.0-facet)"
 fi
 
 echo ""

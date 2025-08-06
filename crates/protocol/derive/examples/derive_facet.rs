@@ -38,8 +38,8 @@ fn main() {
         println!("Deposit {}: 0x{}", idx, hex::encode(dep));
         
         // Show basic deposit transaction info
-        if dep.len() > 1 && dep[0] == 0x7e {
-            println!("  - Type: 0x7e (Deposit transaction)");
+        if dep.len() > 1 && dep[0] == 0x7d {
+            println!("  - Type: 0x7d (Facet deposit transaction)");
             println!("  - Length: {} bytes", dep.len());
             println!("  - Successfully encoded for L2 submission");
         }
@@ -88,8 +88,8 @@ fn main() {
         println!("Deposit {}: 0x{}", idx, hex::encode(dep));
         
         // Show basic deposit transaction info
-        if dep.len() > 1 && dep[0] == 0x7e {
-            println!("  - Type: 0x7e (Deposit transaction)");
+        if dep.len() > 1 && dep[0] == 0x7d {
+            println!("  - Type: 0x7d (Facet deposit transaction)");
             println!("  - Length: {} bytes", dep.len());
             println!("  - Successfully encoded for L2 submission");
         }

@@ -3,7 +3,7 @@
 
 use alloy_consensus::Header;
 use alloy_eips::{BlockNumHash, eip7840::BlobParams};
-use alloy_primitives::{Address, B256, Bytes, Sealable, Sealed, TxKind, U256, address};
+use alloy_primitives::{Address, B256, Bytes, Sealed, TxKind, U256, address};
 use kona_genesis::{RollupConfig, SystemConfig};
 use op_alloy_consensus::{DepositSourceDomain, L1InfoDepositSource, TxDeposit};
 
@@ -123,7 +123,6 @@ impl L1BlockInfoTx {
         // Use default values for the facet-specific fields - these will be overridden
         // by the StatefulAttributesBuilder with calculated values
         let fct_mint_rate = 0u128; // Will be set by caller
-        let fct_mint_period_l1_data_gas = 0u128; // Will be set by caller
         
         Ok(Self::Facet(L1BlockInfoFacet {
             number: l1_header.number,
@@ -138,7 +137,11 @@ impl L1BlockInfoTx {
             empty_scalars: false,
             l1_fee_overhead: U256::ZERO,
             fct_mint_rate,
-            fct_mint_period_l1_data_gas,
+            fct_total_minted: 0,
+            fct_period_start_block: 0,
+            fct_period_minted: 0,
+            fct_max_supply: 0, // Will be set by caller
+            fct_initial_target_per_period: 0, // Will be set by caller
         }))
     }
 
@@ -177,6 +180,8 @@ impl L1BlockInfoTx {
             deposit_tx.gas_limit = REGOLITH_SYSTEM_TX_GAS;
         }
 
+        // Use standard sealing - op-alloy now correctly handles hash computation with mint=None
+        use alloy_primitives::Sealable;
         Ok((l1_info, deposit_tx.seal_slow()))
     }
 
@@ -327,52 +332,16 @@ impl L1BlockInfoTx {
         }
     }
     
-    /// Sets the FCT mint rate and cumulative L1 data gas for Facet variants.
+    /// Sets the FCT mint values for Facet variants.
     /// This is used by the StatefulAttributesBuilder to update the L1 block info
     /// with calculated FCT values after facet deposit processing.
-    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_mint_period_l1_data_gas: u128) {
+    pub fn set_fct_values(&mut self, fct_mint_rate: u128, fct_total_minted: u128, fct_period_start_block: u128, fct_period_minted: u128) {
         if let Self::Facet(facet) = self {
             facet.fct_mint_rate = fct_mint_rate;
-            facet.fct_mint_period_l1_data_gas = fct_mint_period_l1_data_gas;
+            facet.fct_total_minted = fct_total_minted;
+            facet.fct_period_start_block = fct_period_start_block;
+            facet.fct_period_minted = fct_period_minted;
         }
-    }
-    
-    /// Creates a new [L1BlockInfoTx] and corresponding [TxDeposit] with custom FCT values.
-    /// This is used for Facet chains where FCT mint parameters need to be calculated
-    /// based on the current block's facet deposits.
-    pub fn try_new_with_deposit_tx_and_fct_values(
-        rollup_config: &RollupConfig,
-        system_config: &SystemConfig,
-        sequence_number: u64,
-        l1_header: &Header,
-        l2_block_time: u64,
-        fct_mint_rate: u128,
-        fct_mint_period_l1_data_gas: u128,
-    ) -> Result<(Self, Sealed<TxDeposit>), BlockInfoError> {
-        // Create the L1 info transaction first
-        let mut l1_info =
-            Self::try_new(rollup_config, system_config, sequence_number, l1_header, l2_block_time)?;
-        
-        // Set the FCT values if it's a Facet variant
-        l1_info.set_fct_values(fct_mint_rate, fct_mint_period_l1_data_gas);
-
-        let source = DepositSourceDomain::L1Info(L1InfoDepositSource {
-            l1_block_hash: l1_info.block_hash(),
-            seq_number: sequence_number,
-        });
-
-        let deposit_tx = TxDeposit {
-            source_hash: source.source_hash(),
-            from: L1_INFO_DEPOSITOR_ADDRESS,
-            to: TxKind::Call(Predeploys::L1_BLOCK_INFO),
-            mint: None,
-            value: U256::ZERO,
-            gas_limit: REGOLITH_SYSTEM_TX_GAS,
-            is_system_transaction: false,
-            input: l1_info.encode_calldata(),
-        };
-
-        Ok((l1_info, deposit_tx.seal_slow()))
     }
 }
 

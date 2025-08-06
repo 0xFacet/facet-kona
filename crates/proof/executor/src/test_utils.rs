@@ -155,7 +155,10 @@ impl ExecutorTestFixtureCreator {
                     if tx.len() > 0 {
                         match tx[0] {
                             0x7e => {
-                                println!("  Type: DEPOSIT (0x7e)");
+                                panic!("Legacy deposit transaction type 0x7e is not supported. Only Bluebird deposits (0x7d) are supported.");
+                            },
+                            0x7d => {
+                                println!("  Type: DEPOSIT (0x7d - Bluebird)");
                                 // Also fetch the transaction details to see mint value
                                 let tx_details: serde_json::Value = self
                                     .provider
@@ -468,6 +471,6 @@ fn create_custom_facet_config(chain_id: u64) -> RollupConfig {
             eip1559_elasticity: 2,
             eip1559_denominator: 8,
             eip1559_denominator_canyon: 8,
-        },
+        }
     }
 }
